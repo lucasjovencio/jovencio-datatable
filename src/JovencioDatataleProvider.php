@@ -4,7 +4,7 @@ namespace Jovencio\DataTable;
 
 use Illuminate\Support\ServiceProvider;
 
-class SeuPacoteServiceProvider extends ServiceProvider
+class JovencioDatataleProvider extends ServiceProvider
 {
     public function register()
     {

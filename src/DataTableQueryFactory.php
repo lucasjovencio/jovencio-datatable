@@ -224,7 +224,7 @@ class DataTableQueryFactory {
         return $model;
     }
 
-    private static function matchCondiction($condition, $column, $param) :array {
+    public static function matchCondiction($condition, $column, $param) :array {
         if (empty($column) || (!in_array($condition, ['null', '!null']) && (empty($param) || is_null($param[0]) || $param[0] == ' ' || $param[0] == '' ))) return [null, null];
         if (in_array($condition, ['between', '!between']) && (empty($param[0]) || empty($param[1]))) return [null, null];
 
