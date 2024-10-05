@@ -1,10 +1,9 @@
 <?php
 namespace Jovencio\DataTable;
 
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 
-class JovencioDataTableResponse {
+class DataTableQueryFactory {
     protected $request;
 
     public function __construct(Request $request)
@@ -12,30 +11,39 @@ class JovencioDataTableResponse {
         $this->request = $request;
     }
 
-    public function build(Model $model, $config = [
-        'query' => [],
-        'with' => [],
-        'map' => null
+    public function build($model, $config = [
+        'query'     => [],
+        'with'      => [],
+        'select'    => [],
+        'map'       => null
     ]) {
-        $params = $this->request->all();
-        $draw = $this->request->get('draw');
-        $start = $this->request->get('start');
-        $length = $this->request->get('length') ?? 10;
+        $params         = $this->request->all();
+        $draw           = $this->request->get('draw') ?? "0";
+        $start          = $this->request->get('start') ?? 0;
+        $length         = $this->request->get('length') ?? 10;
 
-        $customQuery = $config['query'];
-        $withQuery = $config['with'];
-        $map = $config['map'];
+        $customQuery    = isset($config['query']) && \count($config['query']) ? $config['query'] : [];
+        $withQuery      = isset($config['with']) && \count($config['with']) ? $config['with'] : null;
+        $map            = isset($config['map']) && \is_callable($config['map']) ? $config['map'] : null;
+        $select         = isset($config['select']) && \count($config['select']) ? $config['select'] : null;
 
         $userQuery = self::constructorQueryDataTable($model::query(), $params, $customQuery);
 
         $total = $userQuery->count();
         $userQuery = self::constructorOrderByDataTable($userQuery, $params);
         
-        $data = $userQuery->skip($start)
-                ->limit($length)
-                ->with($withQuery)
-                ->get();
-                
+        $data = $userQuery->skip($start)->limit($length);
+        
+        if ($withQuery) {
+            $data->with($withQuery);
+        }
+
+        if ($select) {
+            $data->select($select);
+        }
+
+        $data = $data->get();
+
         if ($map) {
             $data = $data->map($map)->values();
         }
@@ -48,7 +56,7 @@ class JovencioDataTableResponse {
         );
     }
 
-    static static function constructorQueryDataTable($model, $post, $matchColumns) : Model {
+    private static function constructorQueryDataTable($model, $post, $matchColumns) {
 
         $query = " ";
         $queryParam = [];
@@ -186,7 +194,7 @@ class JovencioDataTableResponse {
         return $model;
     }
 
-    static static function constructorOrderByDataTable($model, $post) :Model {
+    private static function constructorOrderByDataTable($model, $post) {
         if (!empty($post["order"]) && count($post["order"])) {
             $orders = $post["columns"];
 

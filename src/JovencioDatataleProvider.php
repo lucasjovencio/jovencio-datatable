@@ -8,8 +8,8 @@ class SeuPacoteServiceProvider extends ServiceProvider
 {
     public function register()
     {
-        $this->app->bind(JovencioDataTableResponse::class, function ($app) {
-            return new JovencioDataTableResponse($app['request']);
+        $this->app->bind(DataTableQueryFactory::class, function ($app) {
+            return new DataTableQueryFactory($app['request']);
         });
     }
 
