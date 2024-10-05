@@ -22,10 +22,10 @@ class DataTableQueryFactory {
         $start          = $this->request->get('start') ?? 0;
         $length         = $this->request->get('length') ?? 10;
 
-        $customQuery    = isset($config['query']) && \count($config['query']) ? $config['query'] : [];
-        $withQuery      = isset($config['with']) && \count($config['with']) ? $config['with'] : null;
+        $customQuery    = isset($config['query']) && \is_array($config['query']) && \count($config['query']) ? $config['query'] : [];
+        $withQuery      = isset($config['with']) && \is_array($config['with']) && \count($config['with']) ? $config['with'] : null;
         $map            = isset($config['map']) && \is_callable($config['map']) ? $config['map'] : null;
-        $select         = isset($config['select']) && \count($config['select']) ? $config['select'] : null;
+        $select         = isset($config['select']) && \is_array($config['select']) && \count($config['select']) ? $config['select'] : null;
 
         $userQuery = self::constructorQueryDataTable($model::query(), $params, $customQuery);
 
