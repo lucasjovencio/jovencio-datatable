@@ -166,6 +166,8 @@ class DataTableQueryFactory {
         }
 
         $searchQuery = '';
+        $searchParam = [];
+
         if (!empty($post["search"]) && !empty($post["search"]["value"])) {
             $searchs = array_values((array_filter($post["columns"], function($row) {
                 return filter_var($row["searchable"], FILTER_VALIDATE_BOOLEAN);
@@ -174,8 +176,16 @@ class DataTableQueryFactory {
             $lastKey = array_key_last($searchs);
             $searchQuery .= ' (';
             foreach($searchs as $key => $search) {
-                list($auxQuery, $params) = self::matchCondiction('contains', $search["data"] ?? null, [$post["search"]["value"]]);
-                array_push($queryParam, ...$params);
+                if (isset($matchColumns[$search["data"] ?? null])) {
+                    list($auxQuery, $params) = $matchColumns[$search["data"]]([
+                        'condition' => 'contains',
+                        'value' => $post["search"]["value"],
+                    ]);
+                } else {
+                    list($auxQuery, $params) = self::matchCondiction('contains', $search["data"] ?? null, [$post["search"]["value"]]);
+                }
+
+                array_push($searchParam, ...$params);
                 if ($lastKey != $key && $auxQuery) {
                     $searchQuery .= " ({$auxQuery}) OR ";
                 } else if ($auxQuery) {
@@ -189,7 +199,7 @@ class DataTableQueryFactory {
             $model->whereRaw($query, $queryParam);
 
         if (!empty($searchQuery))
-            $model->whereRaw($searchQuery, $queryParam);
+            $model->whereRaw($searchQuery, $searchParam);
 
         return $model;
     }
