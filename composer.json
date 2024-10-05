@@ -1,0 +1,17 @@
+{
+    "name": "jovencio/datatable",
+    "autoload": {
+        "psr-4": {
+            "Jovencio\\DataTable\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "Lucas Jovencio",
+            "email": "lucasjovencio@outlook.com.br"
+        }
+    ],
+    "require": {
+        "laravel/laravel": ">=8"
+    }
+}
