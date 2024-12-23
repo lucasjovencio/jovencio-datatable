@@ -1,6 +1,6 @@
 {
     "name": "jovencio/datatable",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "minimum-stability": "stable",
     "prefer-stable": true,
     "license": "MIT",
@@ -17,6 +17,7 @@
         }
     ],
     "require": {
-        "laravel/framework": ">=8"
+        "php": "^8.0",
+        "illuminate/support": "^8.0 || ^9.0|^10.0 || ^11.0"
     }
 }
