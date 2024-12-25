@@ -1,14 +1,27 @@
 <?php
 namespace Jovencio\DataTable;
 
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 
 class DataTableQueryFactory {
     protected $request;
-
+    private $formatDateLocale = 'm/d/Y';
+    private $timezoneLocale = '+00:00';
+    private $timezoneApp = '+00:00';
+    
     public function __construct(Request $request)
     {
         $this->request = $request;
+        if ($request->has('format_date_locale')) {
+            $this->formatDateLocale = $request->get('format_date_locale');
+        }
+
+        $this->timezoneApp = $this->getTimezoneOffset(config('app.timezone'));
+        $this->timezoneLocale = $this->getTimezoneOffset(config('app.timezone'));
+        if ($request->has('timezone_locale')) {
+            $this->timezoneLocale = $this->getTimezoneOffset($request->get('timezone_locale'));
+        }
     }
 
     public function build($model, $config = [
@@ -18,6 +31,7 @@ class DataTableQueryFactory {
         'map'       => null
     ]) {
         $params         = $this->request->all();
+
         $draw           = $this->request->get('draw') ?? "0";
         $start          = $this->request->get('start') ?? 0;
         $length         = $this->request->get('length') ?? 10;
@@ -27,7 +41,7 @@ class DataTableQueryFactory {
         $map            = isset($config['map']) && \is_callable($config['map']) ? $config['map'] : null;
         $select         = isset($config['select']) && \is_array($config['select']) && \count($config['select']) ? $config['select'] : null;
 
-        $userQuery = self::constructorQueryDataTable($model::query(), $params, $customQuery);
+        $userQuery = $this->constructorQueryDataTable($model::query(), $params, $customQuery);
 
         $total = $userQuery->count();
         $userQuery = self::constructorOrderByDataTable($userQuery, $params);
@@ -67,7 +81,7 @@ class DataTableQueryFactory {
         );
     }
 
-    private static function constructorQueryDataTable($model, $post, $matchColumns) {
+    private function constructorQueryDataTable($model, $post, $matchColumns) {
 
         $query = " ";
         $queryParam = [];
@@ -105,7 +119,7 @@ class DataTableQueryFactory {
                                     if (isset($matchColumns[$row3["origData"] ?? null])) {
                                         list($auxQuery, $params) = $matchColumns[$row3["origData"]]($row3);
                                     } else {
-                                        list($auxQuery, $params) = self::matchCondiction($row3["condition"] ?? null, $row3["origData"] ?? null, $row3["value"] ?? []);
+                                        list($auxQuery, $params) = $this->_matchCondiction($row3["condition"] ?? null, $row3["origData"] ?? null, $row3["value"] ?? [], $row["type"] ?? "string");
                                     }
 
                                     if (!empty($params) && is_array($params))
@@ -132,7 +146,7 @@ class DataTableQueryFactory {
                             if (isset($matchColumns[$row2["origData"] ?? null])) {
                                 list($auxQuery, $params) = $matchColumns[$row2["origData"]]($row2);
                             } else {
-                                list($auxQuery, $params) = self::matchCondiction($row2["condition"] ?? null, $row2["origData"] ?? null, $row2["value"]);
+                                list($auxQuery, $params) = $this->_matchCondiction($row2["condition"] ?? null, $row2["origData"] ?? null, $row2["value"], $row["type"] ?? "string");
                             }
 
                             if (!empty($params) && is_array($params))
@@ -161,7 +175,7 @@ class DataTableQueryFactory {
                     if (isset($matchColumns[$row["origData"] ?? null])) {
                         list($auxQuery, $params) = $matchColumns[$row["origData"]]($row);
                     } else {
-                        list($auxQuery, $params) = self::matchCondiction($row["condition"] ?? null, $row["origData"] ?? null, $row["value"] ?? []);
+                        list($auxQuery, $params) = $this->_matchCondiction($row["condition"] ?? null, $row["origData"] ?? null, $row["value"] ?? [], $row["type"] ?? "string");
                     }
 
                     if (!empty($params) && is_array($params))
@@ -193,7 +207,7 @@ class DataTableQueryFactory {
                         'value' => $post["search"]["value"],
                     ]);
                 } else {
-                    list($auxQuery, $params) = self::matchCondiction('contains', $search["data"] ?? null, [$post["search"]["value"]]);
+                    list($auxQuery, $params) = $this->_matchCondiction('contains', $search["data"] ?? null, [$post["search"]["value"]], $row["type"] ?? "string");
                 }
 
                 array_push($searchParam, ...$params);
@@ -213,6 +227,17 @@ class DataTableQueryFactory {
             $model->whereRaw($searchQuery, $searchParam);
 
         return $model;
+    }
+
+    private function getTimezoneOffset($timezone = "UTC") {
+        $carbon = Carbon::now($timezone);
+        $offset = $carbon->utcOffset(); 
+        $offsetInHours = $offset / 60;
+
+        if ($offsetInHours >= 0) {
+            $offsetInHours = "+".$offsetInHours;
+        }
+        return $offsetInHours.":00";
     }
 
     private static function constructorOrderByDataTable($model, $post) {
@@ -245,49 +270,83 @@ class DataTableQueryFactory {
         return $model;
     }
 
-    public static function matchCondiction($condition, $column, $param) :array {
+    private function formatValue($value, $type) {
+        switch ($type) {
+            case "moment": {
+                $formatDateLocale = match ($this->formatDateLocale) {
+                    "DD/MM/YYYY" => 'd/m/Y',
+                    default => 'm/d/Y'
+                };
+                return Carbon::createFromFormat($formatDateLocale, $value)->format('Y-m-d');
+            }
+            default: {
+                return $value;
+            }
+        }
+    }
+    
+    private function _matchCondiction($condition, $column, $param, $type = 'string') :array {
         if (empty($column) || (!in_array($condition, ['null', '!null']) && (empty($param) || is_null($param[0]) || $param[0] == ' ' || $param[0] == '' ))) return [null, null];
         if (in_array($condition, ['between', '!between']) && (empty($param[0]) || empty($param[1]))) return [null, null];
 
-        $query = match ($condition) {
-            'between' => " {$column} BETWEEN ? AND ? ",
-            '!between' => " {$column} NOT  BETWEEN ? AND ? ",
-            'null' => " {$column} IS NULL ",
-            '!null' => " {$column} IS NOT NULL ",
-            'starts' => " {$column} LIKE ? ",
-            '!starts' => " {$column} NOT LIKE ? ",
-            'contains' => " {$column} LIKE ? ",
-            '!contains' => " {$column} NOT LIKE ? ",
-            'ends' => " {$column} LIKE ? ",
-            '!ends' => " {$column} NOT LIKE ? ",
-            default => " {$column} {$condition} ? "
-        };
+        switch ($type) {
+            case 'date':
+            case 'moment':
+                
+                $query = match ($condition) {
+                    'between' => " CONVERT_TZ({$column}, '{$this->timezoneApp}', '{$this->timezoneLocale}')  BETWEEN ? AND ? ",
+                    '!between' => " CONVERT_TZ({$column}, '{$this->timezoneApp}', '{$this->timezoneLocale}') NOT  BETWEEN ? AND ? ",
+                    'null' => " {$column} IS NULL ",
+                    '!null' => " {$column} IS NOT NULL ",
+                    default => " DATE(CONVERT_TZ({$column}, '{$this->timezoneApp}', '{$this->timezoneLocale}')) {$condition} ? "
+                };
+                break;
+            default:
+                $query = match ($condition) {
+                    'between' => " {$column} BETWEEN ? AND ? ",
+                    '!between' => " {$column} NOT  BETWEEN ? AND ? ",
+                    'null' => " {$column} IS NULL ",
+                    '!null' => " {$column} IS NOT NULL ",
+                    'starts' => " {$column} LIKE ? ",
+                    '!starts' => " {$column} NOT LIKE ? ",
+                    'contains' => " {$column} LIKE ? ",
+                    '!contains' => " {$column} NOT LIKE ? ",
+                    'ends' => " {$column} LIKE ? ",
+                    '!ends' => " {$column} NOT LIKE ? ",
+                    default => " {$column} {$condition} ? "
+                };
+                break;
+        }
 
         $params = [];
         // Adiciona parâmetros ao array
         switch ($condition) {
             case 'between':
             case '!between':
-                $params[] = "{$param[0]} 00:00:00";
-                $params[] = "{$param[1]} 23:59:59";
+                $params[] = $this->formatValue($param[0], $type) . ((in_array($type, ["date", "moment"])) ? " 00:00:00" : '');
+                $params[] = $this->formatValue($param[1], $type) . ((in_array($type, ["date", "moment"])) ? " 23:59:59" : '');
                 break;
             case 'starts':
             case '!starts':
-                $params[] = "{$param[0]}%";
+                $params[] = "{$this->formatValue($param[0], $type)}%";
                 break;
             case 'contains':
             case '!contains':
-                $params[] = "%{$param[0]}%";
+                $params[] = "%{$this->formatValue($param[0], $type)}%";
                 break;
             case 'ends':
             case '!ends':
-                $params[] = "%{$param[0]}";
+                $params[] = "%{$this->formatValue($param[0], $type)}";
                 break;
             default:
-                $params[] = $param[0];
+                $params[] = $this->formatValue($param[0], $type);
                 break;
         }
 
         return [$query, $params];
+    }
+
+    public static function matchCondiction($condition, $column, $param, $type = 'string') :array {
+        return (new self(request()))->_matchCondiction($condition, $column, $param, $type);
     }
 }
