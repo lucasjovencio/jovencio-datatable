@@ -47,6 +47,13 @@ class DataTableQueryFactory {
         if ($map) {
             $data = $data->map($map)->values();
         }
+
+        if ($data->first() && !property_exists($data->first(), 'actions')) {
+            $data->transform(function($row) {
+                $row->actions = '';
+                return $row;
+            });
+        }
         
         return array(
             'draw' => $draw,
