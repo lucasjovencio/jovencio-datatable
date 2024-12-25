@@ -3,12 +3,16 @@ namespace Jovencio\DataTable;
 
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class DataTableQueryFactory {
     protected $request;
     private $formatDateLocale = 'm/d/Y';
     private $timezoneLocale = '+00:00';
+    private $timezoneLocaleName = 'UTC';
     private $timezoneApp = '+00:00';
+    private $timezoneAppName = 'UTC';
+    private $tableName = '';
     
     public function __construct(Request $request)
     {
@@ -18,9 +22,11 @@ class DataTableQueryFactory {
         }
 
         $this->timezoneApp = $this->getTimezoneOffset(config('app.timezone'));
+        $this->timezoneAppName = config('app.timezone');
         $this->timezoneLocale = $this->getTimezoneOffset(config('app.timezone'));
         if ($request->has('timezone_locale')) {
             $this->timezoneLocale = $this->getTimezoneOffset($request->get('timezone_locale'));
+            $this->timezoneLocaleName = $request->get('timezone_locale');
         }
     }
 
@@ -31,6 +37,7 @@ class DataTableQueryFactory {
         'map'       => null
     ]) {
         $params         = $this->request->all();
+        $this->tableName = (new $model)->getTable();
 
         $draw           = $this->request->get('draw') ?? "0";
         $start          = $this->request->get('start') ?? 0;
@@ -270,35 +277,77 @@ class DataTableQueryFactory {
         return $model;
     }
 
-    private function formatValue($value, $type) {
+    private function formatValue($value, $type, $hasTimestamp = false) {
         switch ($type) {
-            case "moment": {
+            case "date": 
+            case "moment": 
                 $formatDateLocale = match ($this->formatDateLocale) {
                     "DD/MM/YYYY" => 'd/m/Y',
                     default => 'm/d/Y'
                 };
+
+                if ($hasTimestamp)
+                    return Carbon::createFromFormat($formatDateLocale, $value, $this->timezoneLocaleName)
+                        ->setTimezone($this->timezoneAppName)
+                        ->format('Y-m-d');
+
                 return Carbon::createFromFormat($formatDateLocale, $value)->format('Y-m-d');
-            }
-            default: {
+            default: 
                 return $value;
-            }
+            
         }
     }
-    
     private function _matchCondiction($condition, $column, $param, $type = 'string') :array {
         if (empty($column) || (!in_array($condition, ['null', '!null']) && (empty($param) || is_null($param[0]) || $param[0] == ' ' || $param[0] == '' ))) return [null, null];
         if (in_array($condition, ['between', '!between']) && (empty($param[0]) || empty($param[1]))) return [null, null];
 
+
         switch ($type) {
             case 'date':
             case 'moment':
-                
+                switch (config('database.default')) {
+                    case 'sqlite':
+                        $columnType = null;
+                        $columnTypeLite = DB::select("PRAGMA table_info({$this->tableName})");
+                        foreach ($columnTypeLite as $column) {
+                            if ($column->name === $column) {
+                                $columnType = $column->type;
+                                break;
+                            }
+                        }
+                        break;
+                    case 'pgsql':
+                        $columnType = DB::table('information_schema.columns')
+                        ->where('table_name', $this->tableName)
+                        ->where('column_name', $column)
+                        ->where('table_schema', 'public')
+                        ->first();
+                        $columnType = $columnType->data_type ? $columnType->data_type : null;
+                        break;
+                    case 'mysql':
+                    case 'mariadb':
+                        $columnType = DB::table('information_schema.columns')
+                        ->where('table_name', $this->tableName)
+                        ->where('column_name', $column)
+                        ->first();
+                        $columnType = $columnType->COLUMN_TYPE ? $columnType->COLUMN_TYPE : null;
+                        break;
+                    case 'sqlsrv':
+                        $columnType = DB::table('INFORMATION_SCHEMA.COLUMNS')
+                        ->where('TABLE_NAME', $this->tableName)
+                        ->where('COLUMN_NAME', $column)
+                        ->first();
+                        $columnType = $columnType->DATA_TYPE ? $columnType->DATA_TYPE : null;
+                        break;
+                }
+                $hasTimestamp = in_array(strtolower($columnType), ['timestamp', 'timestamptz']);
+
                 $query = match ($condition) {
-                    'between' => " CONVERT_TZ({$column}, '{$this->timezoneApp}', '{$this->timezoneLocale}')  BETWEEN ? AND ? ",
-                    '!between' => " CONVERT_TZ({$column}, '{$this->timezoneApp}', '{$this->timezoneLocale}') NOT  BETWEEN ? AND ? ",
+                    'between' => " {$column} BETWEEN ? AND ? ",
+                    '!between' => " {$column} NOT BETWEEN ? AND ? ",
                     'null' => " {$column} IS NULL ",
                     '!null' => " {$column} IS NOT NULL ",
-                    default => " DATE(CONVERT_TZ({$column}, '{$this->timezoneApp}', '{$this->timezoneLocale}')) {$condition} ? "
+                    default => " DATE({$column}) {$condition} ? "
                 };
                 break;
             default:
@@ -319,27 +368,26 @@ class DataTableQueryFactory {
         }
 
         $params = [];
-        // Adiciona parâmetros ao array
         switch ($condition) {
             case 'between':
             case '!between':
-                $params[] = $this->formatValue($param[0], $type) . ((in_array($type, ["date", "moment"])) ? " 00:00:00" : '');
-                $params[] = $this->formatValue($param[1], $type) . ((in_array($type, ["date", "moment"])) ? " 23:59:59" : '');
+                $params[] = $this->formatValue($param[0], $type, $hasTimestamp) . ((in_array($type, ["date", "moment"])) ? " 00:00:00" : '');
+                $params[] = $this->formatValue($param[1], $type, $hasTimestamp) . ((in_array($type, ["date", "moment"])) ? " 23:59:59" : '');
                 break;
             case 'starts':
             case '!starts':
-                $params[] = "{$this->formatValue($param[0], $type)}%";
+                $params[] = "{$this->formatValue($param[0], $type, $hasTimestamp)}%";
                 break;
             case 'contains':
             case '!contains':
-                $params[] = "%{$this->formatValue($param[0], $type)}%";
+                $params[] = "%{$this->formatValue($param[0], $type, $hasTimestamp)}%";
                 break;
             case 'ends':
             case '!ends':
-                $params[] = "%{$this->formatValue($param[0], $type)}";
+                $params[] = "%{$this->formatValue($param[0], $type, $hasTimestamp)}";
                 break;
             default:
-                $params[] = $this->formatValue($param[0], $type);
+                $params[] = $this->formatValue($param[0], $type, $hasTimestamp);
                 break;
         }
 
