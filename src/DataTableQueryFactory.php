@@ -13,6 +13,7 @@ class DataTableQueryFactory {
     private $timezoneApp = '+00:00';
     private $timezoneAppName = 'UTC';
     private $tableName = '';
+    private $timezone = [];
     
     public function __construct(Request $request)
     {
@@ -22,8 +23,8 @@ class DataTableQueryFactory {
         }
 
         $this->timezoneApp = $this->getTimezoneOffset(config('app.timezone'));
-        $this->timezoneAppName = config('app.timezone');
         $this->timezoneLocale = $this->getTimezoneOffset(config('app.timezone'));
+
         if ($request->has('timezone_locale')) {
             $this->timezoneLocale = $this->getTimezoneOffset($request->get('timezone_locale'));
             $this->timezoneLocaleName = $request->get('timezone_locale');
@@ -34,7 +35,9 @@ class DataTableQueryFactory {
         'query'     => [],
         'with'      => [],
         'select'    => [],
-        'map'       => null
+        'map'       => null,
+        'timezone'  => [],
+        "where"     => null
     ]) {
         $params         = $this->request->all();
         $this->tableName = (new $model)->getTable();
@@ -47,11 +50,16 @@ class DataTableQueryFactory {
         $withQuery      = isset($config['with']) && \is_array($config['with']) && \count($config['with']) ? $config['with'] : null;
         $map            = isset($config['map']) && \is_callable($config['map']) ? $config['map'] : null;
         $select         = isset($config['select']) && \is_array($config['select']) && \count($config['select']) ? $config['select'] : null;
+        $this->timezone = isset($config['timezone']) && \is_array($config['timezone']) && \count($config['timezone']) ? $config['timezone'] : [];
 
         $userQuery = $this->constructorQueryDataTable($model::query(), $params, $customQuery);
 
+        if (isset($config['where']) && is_callable($config['where'])) {
+            $userQuery->where($config['where']);
+        }
+
         $total = $userQuery->count();
-        $userQuery = self::constructorOrderByDataTable($userQuery, $params);
+        $userQuery = $this->constructorOrderByDataTable($userQuery, $params);
         
         $data = $userQuery->skip($start)->limit($length);
         
@@ -124,9 +132,11 @@ class DataTableQueryFactory {
                                 } else {
                 
                                     if (isset($matchColumns[$row3["origData"] ?? null])) {
-                                        list($auxQuery, $params) = $matchColumns[$row3["origData"]]($row3);
+                                        list($auxQuery, $params) = $matchColumns[$row3["origData"]]($row3, $this->tableName, function($condition, $column, $param, $type = "string") {
+                                            return $this->_matchConditional($condition, $column, $param, $type);
+                                        });
                                     } else {
-                                        list($auxQuery, $params) = $this->_matchCondiction($row3["condition"] ?? null, $row3["origData"] ?? null, $row3["value"] ?? [], $row["type"] ?? "string");
+                                        list($auxQuery, $params) = $this->_matchConditional($row3["condition"] ?? null, $row3["origData"] ?? null, $row3["value"] ?? [], $row["type"] ?? "string");
                                     }
 
                                     if (!empty($params) && is_array($params))
@@ -141,7 +151,7 @@ class DataTableQueryFactory {
                                 }
                             }
 
-                            // LOGICA DO INDICE 2, COLOCA TODA A QUERY DA ARVORE NO INDICE 3 NA QUERY DO INDICE 2
+                            // LOGICA DO INDICE 2, COLOCA TODA A QUERY DA ARVORE DO INDICE 3 NA QUERY DO INDICE 2
                             if ($lastKey2 != $key2 && $auxQuery) {
                                 $query2 .= " ({$auxQuery}) {$logic2} ";
                             } else if ($auxQuery) {
@@ -151,9 +161,11 @@ class DataTableQueryFactory {
                         } else {
         
                             if (isset($matchColumns[$row2["origData"] ?? null])) {
-                                list($auxQuery, $params) = $matchColumns[$row2["origData"]]($row2);
+                                list($auxQuery, $params) = $matchColumns[$row2["origData"]]($row2, $this->tableName, function($condition, $column, $param, $type = "string") {
+                                    return $this->_matchConditional($condition, $column, $param, $type);
+                                });
                             } else {
-                                list($auxQuery, $params) = $this->_matchCondiction($row2["condition"] ?? null, $row2["origData"] ?? null, $row2["value"], $row["type"] ?? "string");
+                                list($auxQuery, $params) = $this->_matchConditional($row2["condition"] ?? null, $row2["origData"] ?? null, $row2["value"], $row["type"] ?? "string");
                             }
 
                             if (!empty($params) && is_array($params))
@@ -166,11 +178,10 @@ class DataTableQueryFactory {
                                 $query2 .= " ({$auxQuery}) ";
                             }
                         }
-
                     }
 
 
-                    // LOGICA DO INDICE 1, COLOCA TODA A QUERY DA ARVORE NO INDICE 2 NA QUERY DO INDICE 1
+                    // LOGICA DO INDICE 1, COLOCA TODA A QUERY DA ARVORE DO INDICE 2 NA QUERY DO INDICE 1
                     if ($lastKey != $key && $auxQuery) {
                         $query .= " ({$query2}) {$logic1} ";
                     } else if ($auxQuery) {
@@ -180,9 +191,11 @@ class DataTableQueryFactory {
                 } else {
 
                     if (isset($matchColumns[$row["origData"] ?? null])) {
-                        list($auxQuery, $params) = $matchColumns[$row["origData"]]($row);
+                        list($auxQuery, $params) = $matchColumns[$row["origData"]]($row, $this->tableName, function($condition, $column, $param, $type = "string") {
+                            return $this->_matchConditional($condition, $column, $param, $type);
+                        });
                     } else {
-                        list($auxQuery, $params) = $this->_matchCondiction($row["condition"] ?? null, $row["origData"] ?? null, $row["value"] ?? [], $row["type"] ?? "string");
+                        list($auxQuery, $params) = $this->_matchConditional($row["condition"] ?? null, $row["origData"] ?? null, $row["value"] ?? [], $row["type"] ?? "string");
                     }
 
                     if (!empty($params) && is_array($params))
@@ -212,9 +225,11 @@ class DataTableQueryFactory {
                     list($auxQuery, $params) = $matchColumns[$search["data"]]([
                         'condition' => 'contains',
                         'value' => $post["search"]["value"],
-                    ]);
+                    ], $this->tableName, function($condition, $column, $param, $type = "string") {
+                        return $this->_matchConditional($condition, $column, $param, $type);
+                    });
                 } else {
-                    list($auxQuery, $params) = $this->_matchCondiction('contains', $search["data"] ?? null, [$post["search"]["value"]], $row["type"] ?? "string");
+                    list($auxQuery, $params) = $this->_matchConditional('contains', $search["data"] ?? null, [$post["search"]["value"]], $row["type"] ?? "string");
                 }
 
                 array_push($searchParam, ...$params);
@@ -247,7 +262,7 @@ class DataTableQueryFactory {
         return $offsetInHours.":00";
     }
 
-    private static function constructorOrderByDataTable($model, $post) {
+    private function constructorOrderByDataTable($model, $post) {
         if (!empty($post["order"]) && count($post["order"])) {
             $orders = $post["columns"];
 
@@ -277,78 +292,121 @@ class DataTableQueryFactory {
         return $model;
     }
 
-    private function formatValue($value, $type, $hasTimestamp = false) {
-        switch ($type) {
-            case "date": 
-            case "moment": 
+    private function hasTimestamp($column) {
+        switch (strtolower(config('database.default'))) {
+            case 'sqlite':
+                $columnType = null;
+                $columnTypeLite = DB::select("PRAGMA table_info({$this->tableName})");
+                foreach ($columnTypeLite as $column) {
+                    if ($column->name === $column) {
+                        $columnType = $column->type;
+                        break;
+                    }
+                }
+                break;
+            case 'pgsql':
+                $columnType = DB::table('information_schema.columns')
+                ->where('table_name', $this->tableName)
+                ->where('column_name', $column)
+                ->where('table_schema', 'public')
+                ->first();
+                $columnType = $columnType->data_type ? $columnType->data_type : null;
+                break;
+            case 'mysql':
+            case 'mariadb':
+                $columnType = DB::table('information_schema.columns')
+                ->where('table_name', $this->tableName)
+                ->where('column_name', $column)
+                ->first();
+                $columnType = $columnType->COLUMN_TYPE ? $columnType->COLUMN_TYPE : null;
+                break;
+            case 'sqlsrv':
+                $columnType = DB::table('INFORMATION_SCHEMA.COLUMNS')
+                ->where('TABLE_NAME', $this->tableName)
+                ->where('COLUMN_NAME', $column)
+                ->first();
+                $columnType = $columnType->DATA_TYPE ? $columnType->DATA_TYPE : null;
+                break;
+        }
+
+        return in_array(strtolower($columnType), ['timestamp', 'timestamptz']);
+    }
+
+    private function formatValue($column, $value, $type) {
+
+        $defaultReturn = function($column, $formatDateLocale, $value) {
+            $hasTimestamp = $this->hasTimestamp($column);
+            $dateFormat = !empty($this->timezone[$column]["date_format"]["php"]) ? $this->timezone[$column]["date_format"]["php"] : 'Y-m-d H:i';
+            if ($hasTimestamp)
+                return Carbon::createFromFormat($formatDateLocale, $value, $this->timezoneLocaleName)
+                    ->setTimezone($this->timezoneAppName)
+                    ->format($dateFormat);
+            
+            return Carbon::createFromFormat($formatDateLocale, $value)->format($dateFormat);
+        };
+
+        switch (strtolower($type)) {
+            case "date":
+            case "moment":
+
                 $formatDateLocale = match ($this->formatDateLocale) {
-                    "DD/MM/YYYY" => 'd/m/Y',
-                    default => 'm/d/Y'
+                    "DD/MM/YYYY HH:mm" => 'd/m/Y H:i',
+                    default => 'm/d/Y h:i A'
                 };
 
-                if ($hasTimestamp)
-                    return Carbon::createFromFormat($formatDateLocale, $value, $this->timezoneLocaleName)
-                        ->setTimezone($this->timezoneAppName)
-                        ->format('Y-m-d');
+                if (!array_key_exists($column, $this->timezone)) {
+                    return $defaultReturn($column, $formatDateLocale, $value);
+                }
 
-                return Carbon::createFromFormat($formatDateLocale, $value)->format('Y-m-d');
-            default: 
+                if (!array_key_exists('enable', $this->timezone[$column]) || empty($this->timezone[$column]["utc"])) {
+                    return $defaultReturn($column, $formatDateLocale, $value);
+                }
+
+                $dateFormat = !empty($this->timezone[$column]["date_format"]["php"]) ? $this->timezone[$column]["date_format"]["php"] : 'Y-m-d H:i';
+                if ($this->timezone[$column]["enable"])
+                    return Carbon::createFromFormat($formatDateLocale, $value, $this->timezoneLocaleName)
+                        ->setTimezone($this->timezone[$column]["utc"])
+                        ->format($dateFormat);
+
+                return Carbon::createFromFormat($formatDateLocale, $value)->format($dateFormat);
+            default:
                 return $value;
-            
         }
     }
-    private function _matchCondiction($condition, $column, $param, $type = 'string') :array {
-        if (empty($column) || (!in_array($condition, ['null', '!null']) && (empty($param) || is_null($param[0]) || $param[0] == ' ' || $param[0] == '' ))) return [null, null];
-        if (in_array($condition, ['between', '!between']) && (empty($param[0]) || empty($param[1]))) return [null, null];
 
-
-        switch ($type) {
+    private function makeQuery($type, $condition, $column) {
+        switch (strtolower($type)) {
             case 'date':
             case 'moment':
-                switch (config('database.default')) {
-                    case 'sqlite':
-                        $columnType = null;
-                        $columnTypeLite = DB::select("PRAGMA table_info({$this->tableName})");
-                        foreach ($columnTypeLite as $column) {
-                            if ($column->name === $column) {
-                                $columnType = $column->type;
-                                break;
-                            }
-                        }
-                        break;
-                    case 'pgsql':
-                        $columnType = DB::table('information_schema.columns')
-                        ->where('table_name', $this->tableName)
-                        ->where('column_name', $column)
-                        ->where('table_schema', 'public')
-                        ->first();
-                        $columnType = $columnType->data_type ? $columnType->data_type : null;
-                        break;
-                    case 'mysql':
-                    case 'mariadb':
-                        $columnType = DB::table('information_schema.columns')
-                        ->where('table_name', $this->tableName)
-                        ->where('column_name', $column)
-                        ->first();
-                        $columnType = $columnType->COLUMN_TYPE ? $columnType->COLUMN_TYPE : null;
-                        break;
-                    case 'sqlsrv':
-                        $columnType = DB::table('INFORMATION_SCHEMA.COLUMNS')
-                        ->where('TABLE_NAME', $this->tableName)
-                        ->where('COLUMN_NAME', $column)
-                        ->first();
-                        $columnType = $columnType->DATA_TYPE ? $columnType->DATA_TYPE : null;
-                        break;
-                }
-                $hasTimestamp = in_array(strtolower($columnType), ['timestamp', 'timestamptz']);
-
                 $query = match ($condition) {
-                    'between' => " {$column} BETWEEN ? AND ? ",
+                    'between' =>  " {$column} BETWEEN ? AND ? ",
                     '!between' => " {$column} NOT BETWEEN ? AND ? ",
                     'null' => " {$column} IS NULL ",
                     '!null' => " {$column} IS NOT NULL ",
-                    default => " DATE({$column}) {$condition} ? "
+                    default => null
                 };
+                
+                if (is_null($query)) {
+                    switch (strtolower(config('database.default'))) {
+                        case 'sqlite':
+                            $dateFormat = !empty($this->timezone[$column]["date_format"]["sql"]) ? $this->timezone[$column]["date_format"]["sql"] : '%Y-%m-%d %H:%M';
+                            $query = " strftime('{$dateFormat}', {$column}) {$condition} ? ";
+                            break;
+                        case 'pgsql':
+                            $dateFormat = !empty($this->timezone[$column]["date_format"]["sql"]) ? $this->timezone[$column]["date_format"]["sql"] : 'YYYY-MM-DD HH24:MI';
+                            $query = " to_char({$column}, '{$dateFormat}') {$condition} ? ";
+                            break;
+                        case 'mysql':
+                        case 'mariadb':
+                            $dateFormat = !empty($this->timezone[$column]["date_format"]["sql"]) ? $this->timezone[$column]["date_format"]["sql"] : '%Y-%m-%d %H:%i';
+                            $query = " DATE_FORMAT({$column}, '{$dateFormat}') {$condition} ? ";
+                            break;
+                        case 'sqlsrv':
+                            $dateFormat = !empty($this->timezone[$column]["date_format"]["sql"]) ? $this->timezone[$column]["date_format"]["sql"] : 'yyyy-MM-dd HH:mm';
+                            $query = " FORMAT({$column}, '{$dateFormat}') {$condition} ? ";
+                            break;
+                    }
+                }
                 break;
             default:
                 $query = match ($condition) {
@@ -366,35 +424,54 @@ class DataTableQueryFactory {
                 };
                 break;
         }
+        return $query;
+    }
 
+    private function makeParams($type, $condition, $column, $param) {
         $params = [];
-        switch ($condition) {
+        $typeDate = in_array(strtolower($type), ['date', 'moment']);
+
+        switch (strtolower($condition)) {
             case 'between':
             case '!between':
-                $params[] = $this->formatValue($param[0], $type, $hasTimestamp) . ((in_array($type, ["date", "moment"])) ? " 00:00:00" : '');
-                $params[] = $this->formatValue($param[1], $type, $hasTimestamp) . ((in_array($type, ["date", "moment"])) ? " 23:59:59" : '');
+                $params[] = $this->formatValue($column, $param[0], $type) . (($typeDate) ? ":00" : '');
+                $params[] = $this->formatValue($column, $param[1], $type) . (($typeDate) ? ":59" : '');
                 break;
             case 'starts':
             case '!starts':
-                $params[] = "{$this->formatValue($param[0], $type, $hasTimestamp)}%";
+                $params[] = "{$this->formatValue($column, $param[0], $type)}%";
                 break;
             case 'contains':
             case '!contains':
-                $params[] = "%{$this->formatValue($param[0], $type, $hasTimestamp)}%";
+                $params[] = "%{$this->formatValue($column, $param[0], $type)}%";
                 break;
             case 'ends':
             case '!ends':
-                $params[] = "%{$this->formatValue($param[0], $type, $hasTimestamp)}";
+                $params[] = "%{$this->formatValue($column, $param[0], $type)}";
                 break;
             default:
-                $params[] = $this->formatValue($param[0], $type, $hasTimestamp);
+                $params[] = $this->formatValue($column, $param[0], $type);
                 break;
         }
+        return $params;
+    }
 
+    private function _matchConditional($condition, $column, $param, $type = 'string') :array {
+        if (empty($column) || (!in_array(strtolower($condition), ['null', '!null']) && (empty($param) || is_null($param[0]) || $param[0] == ' ' || $param[0] == '' ))) return [null, null];
+        if (in_array(strtolower($condition), ['between', '!between']) && (empty($param[0]) || empty($param[1]))) return [null, null];
+
+        $query = $this->makeQuery($type, $condition, $column);
+        $params = $this->makeParams($type, $condition, $column, $param);
+        
         return [$query, $params];
     }
 
+    /**
+     * The function is deprecated. The clause is now provided in the third parameter of the column query customization closure.
+     *
+     * @deprecated The function is deprecated. The clause is now provided in the third parameter of the column query customization closure.
+     */
     public static function matchCondiction($condition, $column, $param, $type = 'string') :array {
-        return (new self(request()))->_matchCondiction($condition, $column, $param, $type);
+        return (new self(request()))->_matchConditional($condition, $column, $param, $type);
     }
 }
