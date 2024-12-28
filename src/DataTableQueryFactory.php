@@ -2,8 +2,10 @@
 namespace Jovencio\DataTable;
 
 use Carbon\Carbon;
+use DateTime;
+use DateTimeZone;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Database\Capsule\Manager as DB;
 
 class DataTableQueryFactory {
     protected $request;
@@ -102,109 +104,128 @@ class DataTableQueryFactory {
         $queryParam = [];
         if (isset($post["searchBuilder"]["criteria"]) && isset($post["searchBuilder"]["criteria"]) && count($post["searchBuilder"]["criteria"])) {
 
-            $oneThree = $post["searchBuilder"]["criteria"];
-            $logic1 = $post["searchBuilder"]["logic"];
-            $lastKey = array_key_last($oneThree);
+            $oneTree = $post["searchBuilder"]["criteria"];
+            $oneTree = array_values(array_filter($oneTree, function($row) {
+                return count(array_filter($row['value'] ?? [], function($value) {
+                    return !is_null($value) && trim($value ?? "") != '';
+                })) || array_key_exists('logic', $row);
+            }));
 
-            foreach ($oneThree as $key => $row) {
+            $logic1 = $post["searchBuilder"]["logic"];
+            $lastKey = array_key_last($oneTree);
+
+
+            foreach ($oneTree as $key => $row) {
                 
                 if (isset($row['logic'])) {
 
                     $logic2 = $row['logic'];
                     $query2 = '';
 
-                    $lastKey2 = array_key_last($row['criteria']);
+                    $secondTree = $row['criteria'];
+                    $secondTree = array_values(array_filter($secondTree, function($row) {
+                        return count(array_filter($row['value'] ?? [], function($value) {
+                            return !is_null($value) && trim($value ?? "") != '';
+                        })) || array_key_exists('logic', $row);
+                    }));
 
-                    foreach ($row['criteria'] as $key2 => $row2) {
+                    $lastKey2 = array_key_last($secondTree);
+
+                    foreach ($secondTree as $key2 => $row2) {
                 
                         if (isset($row2['logic'])) {
-
-
+                            // Inicio da arvore 3
                             $logic3 = $row2['logic'];
                             $query3 = '';
 
-                            $lastKey3 = array_key_last($row2['criteria']);
+                            $threeTree = $row2['criteria'];
+                            $threeTree = array_values(array_filter($threeTree, function($row) {
+                                return count(array_filter($row['value'] ?? [], function($value) {
+                                    return !is_null($value) && trim($value ?? "") != '';
+                                })) || array_key_exists('logic', $row);
+                            }));
 
-                            foreach ($row2['criteria'] as $key3 => $row3) {
+                            $lastKey3 = array_key_last($threeTree);
+
+                            foreach ($threeTree as $key3 => $row3) {
                         
                                 if (isset($row3['logic'])) {
                                     // limit 3
                                 } else {
                 
                                     if (isset($matchColumns[$row3["origData"] ?? null])) {
-                                        list($auxQuery, $params) = $matchColumns[$row3["origData"]]($row3, $this->tableName, function($condition, $column, $param, $type = "string") {
+                                        list($auxQuery3, $params) = $matchColumns[$row3["origData"]]($row3, $this->tableName, function($condition, $column, $param, $type = "string") {
                                             return $this->_matchConditional($condition, $column, $param, $type);
                                         });
                                     } else {
-                                        list($auxQuery, $params) = $this->_matchConditional($row3["condition"] ?? null, $row3["origData"] ?? null, $row3["value"] ?? [], $row["type"] ?? "string");
+                                        list($auxQuery3, $params) = $this->_matchConditional($row3["condition"] ?? null, $row3["origData"] ?? null, $row3["value"] ?? [], $row3["type"] ?? "string");
                                     }
 
                                     if (!empty($params) && is_array($params))
                                         array_push($queryParam, ...$params);
-                                    
 
-                                    if ($lastKey3 != $key3 && $auxQuery) {
-                                        $query3 .= " ({$auxQuery}) {$logic3} ";
-                                    } else if ($auxQuery) {
-                                        $query3 .= " ({$auxQuery}) ";
+                                    if ($lastKey3 != $key3 && !empty($auxQuery3)) {
+                                        $query3 .= " ({$auxQuery3}) {$logic3} ";
+                                    } else if (!empty($auxQuery3)) {
+                                        $query3 .= " ({$auxQuery3}) ";
                                     }
                                 }
+                                // Fim da arvore 3.
                             }
 
                             // LOGICA DO INDICE 2, COLOCA TODA A QUERY DA ARVORE DO INDICE 3 NA QUERY DO INDICE 2
-                            if ($lastKey2 != $key2 && $auxQuery) {
-                                $query2 .= " ({$auxQuery}) {$logic2} ";
-                            } else if ($auxQuery) {
-                                $query2 .= " ({$auxQuery}) ";
+                            if ($lastKey2 != $key2 && !empty($query3)) {
+                                $query2 .= " ({$query3}) {$logic2} ";
+                            } else if (!empty($query3)) {
+                                $query2 .= " ({$query3}) ";
                             }
 
                         } else {
         
                             if (isset($matchColumns[$row2["origData"] ?? null])) {
-                                list($auxQuery, $params) = $matchColumns[$row2["origData"]]($row2, $this->tableName, function($condition, $column, $param, $type = "string") {
+                                list($auxQuery2, $params) = $matchColumns[$row2["origData"]]($row2, $this->tableName, function($condition, $column, $param, $type = "string") {
                                     return $this->_matchConditional($condition, $column, $param, $type);
                                 });
                             } else {
-                                list($auxQuery, $params) = $this->_matchConditional($row2["condition"] ?? null, $row2["origData"] ?? null, $row2["value"], $row["type"] ?? "string");
+                                list($auxQuery2, $params) = $this->_matchConditional($row2["condition"] ?? null, $row2["origData"] ?? null, $row2["value"], $row2["type"] ?? "string");
                             }
 
                             if (!empty($params) && is_array($params))
                                 array_push($queryParam, ...$params);
                             
                             // LOGICA DO INDICE 2
-                            if ($lastKey2 != $key2 && $auxQuery) {
-                                $query2 .= " ({$auxQuery}) {$logic2} ";
-                            } else if ($auxQuery) {
-                                $query2 .= " ({$auxQuery}) ";
+                            if ($lastKey2 != $key2 && !empty($auxQuery2)) {
+                                $query2 .= " ({$auxQuery2}) {$logic2} ";
+                            } else if (!empty($auxQuery2)) {
+                                $query2 .= " ({$auxQuery2}) ";
                             }
                         }
                     }
 
-
                     // LOGICA DO INDICE 1, COLOCA TODA A QUERY DA ARVORE DO INDICE 2 NA QUERY DO INDICE 1
-                    if ($lastKey != $key && $auxQuery) {
+                    if ($lastKey != $key && !empty($query2)) {
                         $query .= " ({$query2}) {$logic1} ";
-                    } else if ($auxQuery) {
+                    } else if (!empty($query2)) {
                         $query .= " ({$query2}) ";
                     }
 
                 } else {
 
                     if (isset($matchColumns[$row["origData"] ?? null])) {
-                        list($auxQuery, $params) = $matchColumns[$row["origData"]]($row, $this->tableName, function($condition, $column, $param, $type = "string") {
+                        list($auxQuery1, $params) = $matchColumns[$row["origData"]]($row, $this->tableName, function($condition, $column, $param, $type = "string") {
                             return $this->_matchConditional($condition, $column, $param, $type);
                         });
                     } else {
-                        list($auxQuery, $params) = $this->_matchConditional($row["condition"] ?? null, $row["origData"] ?? null, $row["value"] ?? [], $row["type"] ?? "string");
+                        list($auxQuery1, $params) = $this->_matchConditional($row["condition"] ?? null, $row["origData"] ?? null, $row["value"] ?? [], $row["type"] ?? "string");
                     }
 
                     if (!empty($params) && is_array($params))
                         array_push($queryParam, ...$params);
 
-                    if ($lastKey != $key && $auxQuery) {
-                        $query .= " ({$auxQuery}) {$logic1} ";
-                    } else if ($auxQuery) {
-                        $query .= " ({$auxQuery}) ";
+                    if ($lastKey != $key && !empty($auxQuery1)) {
+                        $query .= " ({$auxQuery1}) {$logic1} ";
+                    } else if (!empty($auxQuery1)) {
+                        $query .= " ({$auxQuery1}) ";
                     }
                 }
             }
@@ -297,9 +318,9 @@ class DataTableQueryFactory {
             case 'sqlite':
                 $columnType = null;
                 $columnTypeLite = DB::select("PRAGMA table_info({$this->tableName})");
-                foreach ($columnTypeLite as $column) {
-                    if ($column->name === $column) {
-                        $columnType = $column->type;
+                foreach ($columnTypeLite as $columnLite) {
+                    if ($columnLite->name === $column) {
+                        $columnType = $columnLite->type;
                         break;
                     }
                 }
@@ -329,7 +350,7 @@ class DataTableQueryFactory {
                 break;
         }
 
-        return in_array(strtolower($columnType), ['timestamp', 'timestamptz']);
+        return in_array(strtolower($columnType), ['timestamp', 'timestamptz', 'datetime']);
     }
 
     private function formatValue($column, $value, $type) {
@@ -337,12 +358,16 @@ class DataTableQueryFactory {
         $defaultReturn = function($column, $formatDateLocale, $value) {
             $hasTimestamp = $this->hasTimestamp($column);
             $dateFormat = !empty($this->timezone[$column]["date_format"]["php"]) ? $this->timezone[$column]["date_format"]["php"] : 'Y-m-d H:i';
-            if ($hasTimestamp)
-                return Carbon::createFromFormat($formatDateLocale, $value, $this->timezoneLocaleName)
-                    ->setTimezone($this->timezoneAppName)
-                    ->format($dateFormat);
+            if ($hasTimestamp) {
+                $date = DateTime::createFromFormat($formatDateLocale, $value, new DateTimeZone($this->timezoneLocaleName));
+                $date->setTimezone(new DateTimeZone($this->timezoneAppName));
+                $formattedDate = $date->format($dateFormat);
+                return $formattedDate;
+            }
             
-            return Carbon::createFromFormat($formatDateLocale, $value)->format($dateFormat);
+            $date = DateTime::createFromFormat($formatDateLocale, $value);
+            $formattedDate = $date->format($dateFormat);
+            return $formattedDate;
         };
 
         switch (strtolower($type)) {
@@ -363,12 +388,22 @@ class DataTableQueryFactory {
                 }
 
                 $dateFormat = !empty($this->timezone[$column]["date_format"]["php"]) ? $this->timezone[$column]["date_format"]["php"] : 'Y-m-d H:i';
-                if ($this->timezone[$column]["enable"])
-                    return Carbon::createFromFormat($formatDateLocale, $value, $this->timezoneLocaleName)
-                        ->setTimezone($this->timezone[$column]["utc"])
-                        ->format($dateFormat);
+                if ($this->timezone[$column]["enable"]) {
+                    $date = DateTime::createFromFormat($formatDateLocale, $value, new DateTimeZone($this->timezoneLocaleName));
+                    $date->setTimezone(new DateTimeZone($this->timezone[$column]["utc"]));
+                    $formattedDate = $date->format($dateFormat);
+                    return $formattedDate;
+                }
 
-                return Carbon::createFromFormat($formatDateLocale, $value)->format($dateFormat);
+                $date = DateTime::createFromFormat($formatDateLocale, $value);
+                $formattedDate = $date->format($dateFormat);
+                return $formattedDate;
+            case "num":
+            case "num-fmt":
+                if (is_numeric($value)) {
+                    return floatval($value);
+                }
+                return $value;
             default:
                 return $value;
         }
