@@ -5,7 +5,8 @@ use Carbon\Carbon;
 use DateTime;
 use DateTimeZone;
 use Illuminate\Http\Request;
-use Illuminate\Database\Capsule\Manager as DB;
+use Illuminate\Support\Facades\DB as DBLaravel;
+use Illuminate\Database\Capsule\Manager as DBManager;
 
 class DataTableQueryFactory {
     protected $request;
@@ -245,7 +246,8 @@ class DataTableQueryFactory {
                 if (isset($matchColumns[$search["data"] ?? null])) {
                     list($auxQuery, $params) = $matchColumns[$search["data"]]([
                         'condition' => 'contains',
-                        'value' => $post["search"]["value"],
+                        'value' => [$post["search"]["value"]],
+                        'type' => 'string'
                     ], $this->tableName, function($condition, $column, $param, $type = "string") {
                         return $this->_matchConditional($condition, $column, $param, $type);
                     });
@@ -317,7 +319,12 @@ class DataTableQueryFactory {
         switch (strtolower(config('database.default'))) {
             case 'sqlite':
                 $columnType = null;
-                $columnTypeLite = DB::select("PRAGMA table_info({$this->tableName})");
+                try {
+                    $columnTypeLite = DBLaravel::select("PRAGMA table_info({$this->tableName})");
+                } catch (\Exception $th) {
+                    $columnTypeLite = DBManager::select("PRAGMA table_info({$this->tableName})");
+                }
+
                 foreach ($columnTypeLite as $columnLite) {
                     if ($columnLite->name === $column) {
                         $columnType = $columnLite->type;
@@ -326,26 +333,49 @@ class DataTableQueryFactory {
                 }
                 break;
             case 'pgsql':
-                $columnType = DB::table('information_schema.columns')
-                ->where('table_name', $this->tableName)
-                ->where('column_name', $column)
-                ->where('table_schema', 'public')
-                ->first();
+                try {
+                    $columnType = DBLaravel::table('information_schema.columns')
+                    ->where('table_name', $this->tableName)
+                    ->where('column_name', $column)
+                    ->where('table_schema', 'public')
+                    ->first();
+                } catch (\Exception $th) {
+                    $columnType = DBManager::table('information_schema.columns')
+                    ->where('table_name', $this->tableName)
+                    ->where('column_name', $column)
+                    ->where('table_schema', 'public')
+                    ->first();
+                }
+                
                 $columnType = $columnType->data_type ? $columnType->data_type : null;
                 break;
             case 'mysql':
             case 'mariadb':
-                $columnType = DB::table('information_schema.columns')
-                ->where('table_name', $this->tableName)
-                ->where('column_name', $column)
-                ->first();
+                try {
+                    $columnType = DBLaravel::table('information_schema.columns')
+                    ->where('table_name', $this->tableName)
+                    ->where('column_name', $column)
+                    ->first();
+                } catch (\Exception $th) {
+                    $columnType = DBManager::table('information_schema.columns')
+                    ->where('table_name', $this->tableName)
+                    ->where('column_name', $column)
+                    ->first();
+                }
                 $columnType = $columnType->COLUMN_TYPE ? $columnType->COLUMN_TYPE : null;
                 break;
             case 'sqlsrv':
-                $columnType = DB::table('INFORMATION_SCHEMA.COLUMNS')
-                ->where('TABLE_NAME', $this->tableName)
-                ->where('COLUMN_NAME', $column)
-                ->first();
+                try {
+                    $columnType = DBLaravel::table('INFORMATION_SCHEMA.COLUMNS')
+                    ->where('TABLE_NAME', $this->tableName)
+                    ->where('COLUMN_NAME', $column)
+                    ->first();
+                } catch (\Exception $th) {
+                    $columnType = DBManager::table('INFORMATION_SCHEMA.COLUMNS')
+                    ->where('TABLE_NAME', $this->tableName)
+                    ->where('COLUMN_NAME', $column)
+                    ->first();
+                }
                 $columnType = $columnType->DATA_TYPE ? $columnType->DATA_TYPE : null;
                 break;
         }
@@ -465,6 +495,10 @@ class DataTableQueryFactory {
     private function makeParams($type, $condition, $column, $param) {
         $params = [];
         $typeDate = in_array(strtolower($type), ['date', 'moment']);
+        
+        if (!is_array($param)) {
+            $param = [$param];
+        }
 
         switch (strtolower($condition)) {
             case 'between':

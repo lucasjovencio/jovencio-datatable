@@ -5,7 +5,7 @@ use Jovencio\DataTable\DataTableQueryFactory;
 use Illuminate\Http\Request;
 use Illuminate\Database\Capsule\Manager as Capsule;
 use Jovencio\Tests\Models\UserTest;
-// use Jovencio\Tests\Models\PostTest;
+use Jovencio\Tests\Models\PostTest;
 use Faker\Factory as Faker;
 
 if (!function_exists('config')) {
@@ -136,7 +136,20 @@ class DataTableQueryFactoryBuildTest extends TestCase
         self::$capsule->table('post_tests')->insert($posts);
     }
 
-    public function testVerifyTheCorrectReturnOfTheBuildMethod()
+    public function testIWouldLikeASimpleUsageOfTheLibrary()
+    {
+        $request = new Request;
+        $dataTableQueryFactory = new DataTableQueryFactory($request);
+        $result = $dataTableQueryFactory->build(UserTest::class);
+        
+        $this->assertIsArray($result);
+        $this->assertArrayHasKey('draw', $result);
+        $this->assertArrayHasKey('recordsTotal', $result);
+        $this->assertArrayHasKey('recordsFiltered', $result);
+        $this->assertArrayHasKey('data', $result);
+    }
+    
+    public function testIWantToVerifyTheCorrectReturnOfTheBuildMethod()
     {
         $request = new Request;
         $request->merge([
@@ -1568,4 +1581,350 @@ class DataTableQueryFactoryBuildTest extends TestCase
     //     $this->assertNotEmpty($result['data']);
     //     $this->assertTrue(count($result['data']) >= 0);
     // }
+
+    public function testIWantAllPostFromLucas()
+    {
+        $request = new Request;
+        $request->merge([
+            "draw" => 1,
+            "columns" => [
+                [
+                    "data" => "id",
+                    "name" => "",
+                    "searchable" => false,
+                    "orderable" => true,
+                    "search" => [
+                        "value" => "",
+                        "regex" => false
+                    ]
+                ],
+                [
+                    "data" => "title",
+                    "name" => "",
+                    "searchable" => true,
+                    "orderable" => true,
+                    "search" => [
+                        "value" => "",
+                        "regex" => false
+                    ]
+                ],
+                [
+                    "data" => "content",
+                    "name" => "",
+                    "searchable" => true,
+                    "orderable" => true,
+                    "search" => [
+                        "value" => "",
+                        "regex" => false
+                    ]
+                ],
+                [
+                    "data" => "user_test_id",
+                    "name" => "",
+                    "searchable" => false,
+                    "orderable" => false,
+                    "search" => [
+                        "value" => "",
+                        "regex" => false
+                    ]
+                ],
+                [
+                    "data" => "created_at",
+                    "name" => "",
+                    "searchable" => false,
+                    "orderable" => true,
+                    "search" => [
+                        "value" => "",
+                        "regex" => false
+                    ]
+                ],
+                [
+                    "data" => "actions",
+                    "name" => "",
+                    "searchable" => false,
+                    "orderable" => false,
+                    "search" => [
+                        "value" => "",
+                        "regex" => false
+                    ]
+                ]
+            ],
+            "order" => [
+                [
+                    "column" => 0,
+                    "dir" => "asc",
+                    "name" => ""
+                ]
+            ],
+            "start" => 0,
+            "length" => 10,
+            "search" => [
+                "value" => "",
+                "regex" => false
+            ],
+            'searchBuilder' => [
+                'criteria' => [
+                    [
+                        'condition' => '=',
+                        'data' => 'Author',
+                        'origData' => 'user_test_id',
+                        'type' => 'string',
+                        'value' => ['Lucas Jovencio'],
+                        'value1' => 'Lucas Jovencio'
+                    ]
+                ],
+                'logic' => 'AND'
+            ],
+            "format_date_locale" => "DD/MM/YYYY HH:mm",
+            "timezone_locale" => "America/Sao_Paulo"
+        ]);
+
+        $dataTableQueryFactory = new DataTableQueryFactory($request);
+        $config = [
+            'query' => [
+                "user_test_id" => function($criteria, $tableName, $matchConditional) {
+                    list($queryParam, $params) = $matchConditional($criteria['condition'], 'user.name', $criteria['value'], $criteria['type']);
+                    return (!empty($queryParam)) ? [" ( EXISTS ( SELECT 1 FROM user_tests user WHERE user.id = {$tableName}.user_test_id and ({$queryParam}) ) ) ", $params] : null;
+                }
+            ],
+            'with' => ["user"],
+            'select' => ["id", "title", "content", "user_test_id", "created_at"],
+            'map' => fn($post) => [
+                'id' => $post->id,
+                'content' => $post->content,
+                'title' => $post->title,
+                'created_at' => $post->created_at,
+                'user_test_id' => $post->user->name,
+            ],
+        ];
+
+        $result = $dataTableQueryFactory->build(PostTest::class, $config);
+
+        $this->assertIsArray($result);
+        $this->assertArrayHasKey('data', $result);
+        $this->assertNotEmpty($result['data']);
+        $this->assertSame($result['data'][0]['user_test_id'], "Lucas Jovencio");
+    }
+
+    public function testIWouldLikeToSearchForPostsWithoutUsingTheQueryBuilder()
+    {
+        $request = new Request;
+        $request->merge([
+            "draw" => 1,
+            "columns" => [
+                [
+                    "data" => "id",
+                    "name" => "",
+                    "searchable" => false,
+                    "orderable" => true,
+                    "search" => [
+                        "value" => "",
+                        "regex" => false
+                    ]
+                ],
+                [
+                    "data" => "title",
+                    "name" => "",
+                    "searchable" => true,
+                    "orderable" => true,
+                    "search" => [
+                        "value" => "",
+                        "regex" => false
+                    ]
+                ],
+                [
+                    "data" => "content",
+                    "name" => "",
+                    "searchable" => true,
+                    "orderable" => true,
+                    "search" => [
+                        "value" => "",
+                        "regex" => false
+                    ]
+                ],
+                [
+                    "data" => "user_test_id",
+                    "name" => "",
+                    "searchable" => false,
+                    "orderable" => false,
+                    "search" => [
+                        "value" => "",
+                        "regex" => false
+                    ]
+                ],
+                [
+                    "data" => "created_at",
+                    "name" => "",
+                    "searchable" => false,
+                    "orderable" => true,
+                    "search" => [
+                        "value" => "",
+                        "regex" => false
+                    ]
+                ],
+                [
+                    "data" => "actions",
+                    "name" => "",
+                    "searchable" => false,
+                    "orderable" => false,
+                    "search" => [
+                        "value" => "",
+                        "regex" => false
+                    ]
+                ]
+            ],
+            "order" => [
+                [
+                    "column" => 0,
+                    "dir" => "asc",
+                    "name" => ""
+                ]
+            ],
+            "start" => 0,
+            "length" => 10,
+            "search" => [
+                "value" => "laravel",
+                "regex" => false
+            ],
+            "format_date_locale" => "DD/MM/YYYY HH:mm",
+            "timezone_locale" => "America/Sao_Paulo"
+        ]);
+
+        $dataTableQueryFactory = new DataTableQueryFactory($request);
+        $config = [
+            'query' => [
+                "user_test_id" => function($criteria, $tableName, $matchConditional) {
+                    list($queryParam, $params) = $matchConditional($criteria['condition'], 'user.name', $criteria['value'], $criteria['type']);
+                    return (!empty($queryParam)) ? [" ( EXISTS ( SELECT 1 FROM user_tests user WHERE user.id = {$tableName}.user_test_id and ({$queryParam}) ) ) ", $params] : null;
+                }
+            ],
+            'with' => ["user"],
+            'select' => ["id", "title", "content", "user_test_id", "created_at"],
+            'map' => fn($post) => [
+                'id' => $post->id,
+                'content' => $post->content,
+                'title' => $post->title,
+                'created_at' => $post->created_at,
+                'user_test_id' => $post->user->name,
+            ],
+        ];
+
+        $result = $dataTableQueryFactory->build(PostTest::class, $config);
+
+        $this->assertIsArray($result);
+        $this->assertArrayHasKey('data', $result);
+        $this->assertNotEmpty($result['data']);
+        $this->assertTrue(strpos($result['data'][0]['title'], 'laravel') !== false);
+    }
+
+    public function testIWantAllPostFromLucasWithoutUsingTheQueryBuilder()
+    {
+        $request = new Request;
+        $request->merge([
+            "draw" => 1,
+            "columns" => [
+                [
+                    "data" => "id",
+                    "name" => "",
+                    "searchable" => false,
+                    "orderable" => true,
+                    "search" => [
+                        "value" => "",
+                        "regex" => false
+                    ]
+                ],
+                [
+                    "data" => "title",
+                    "name" => "",
+                    "searchable" => true,
+                    "orderable" => true,
+                    "search" => [
+                        "value" => "",
+                        "regex" => false
+                    ]
+                ],
+                [
+                    "data" => "content",
+                    "name" => "",
+                    "searchable" => true,
+                    "orderable" => true,
+                    "search" => [
+                        "value" => "",
+                        "regex" => false
+                    ]
+                ],
+                [
+                    "data" => "user_test_id",
+                    "name" => "",
+                    "searchable" => true,
+                    "orderable" => false,
+                    "search" => [
+                        "value" => "",
+                        "regex" => false
+                    ]
+                ],
+                [
+                    "data" => "created_at",
+                    "name" => "",
+                    "searchable" => false,
+                    "orderable" => true,
+                    "search" => [
+                        "value" => "",
+                        "regex" => false
+                    ]
+                ],
+                [
+                    "data" => "actions",
+                    "name" => "",
+                    "searchable" => false,
+                    "orderable" => false,
+                    "search" => [
+                        "value" => "",
+                        "regex" => false
+                    ]
+                ]
+            ],
+            "order" => [
+                [
+                    "column" => 0,
+                    "dir" => "asc",
+                    "name" => ""
+                ]
+            ],
+            "start" => 0,
+            "length" => 10,
+            "search" => [
+                "value" => "Lucas Jovencio",
+                "regex" => false
+            ],
+            "format_date_locale" => "DD/MM/YYYY HH:mm",
+            "timezone_locale" => "America/Sao_Paulo"
+        ]);
+
+        $dataTableQueryFactory = new DataTableQueryFactory($request);
+        $config = [
+            'query' => [
+                "user_test_id" => function($criteria, $tableName, $matchConditional) {
+                    list($queryParam, $params) = $matchConditional($criteria['condition'], 'user.name', $criteria['value'], $criteria['type']);
+                    return (!empty($queryParam)) ? [" ( EXISTS ( SELECT 1 FROM user_tests user WHERE user.id = {$tableName}.user_test_id and ({$queryParam}) ) ) ", $params] : null;
+                }
+            ],
+            'with' => ["user"],
+            'select' => ["id", "title", "content", "user_test_id", "created_at"],
+            'map' => fn($post) => [
+                'id' => $post->id,
+                'content' => $post->content,
+                'title' => $post->title,
+                'created_at' => $post->created_at,
+                'user_test_id' => $post->user->name,
+            ],
+        ];
+
+        $result = $dataTableQueryFactory->build(PostTest::class, $config);
+
+        $this->assertIsArray($result);
+        $this->assertArrayHasKey('data', $result);
+        $this->assertNotEmpty($result['data']);
+        $this->assertSame($result['data'][0]['user_test_id'], "Lucas Jovencio");
+    }
 }
