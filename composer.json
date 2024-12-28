@@ -1,6 +1,6 @@
 {
     "name": "jovencio/datatable",
-    "version": "1.0.5",
+    "version": "1.0.6",
     "minimum-stability": "stable",
     "prefer-stable": true,
     "license": "MIT",
@@ -8,6 +8,11 @@
     "autoload": {
         "psr-4": {
             "Jovencio\\DataTable\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Jovencio\\Tests\\": "tests/"
         }
     },
     "authors": [
@@ -19,5 +24,14 @@
     "require": {
         "php": "^8.0",
         "illuminate/support": "^8.0 || ^9.0 || ^10.0 || ^11.0"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^11.5",
+        "illuminate/http": "^11.36",
+        "illuminate/database": "^11.36",
+        "mockery/mockery": "^1.6",
+        "illuminate/config": "^11.36",
+        "fakerphp/faker": "^1.24",
+        "illuminate/testing": "^11.36"
     }
 }
