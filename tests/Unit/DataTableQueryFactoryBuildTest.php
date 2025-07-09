@@ -866,8 +866,8 @@ class DataTableQueryFactoryBuildTest extends TestCase
                                 'data' => 'Email veried at',
                                 'origData' => 'email_verified_at',
                                 'type' => 'moment',
-                                'value' => ['01/01/'.date('Y').' 12:00 AM'],
-                                'value1' => '01/01/'.date('Y').' 12:00 AM'
+                                'value' => ['01/01/2024 12:00 AM'],
+                                'value1' => '01/01/2024 12:00 AM'
                             ],
                             [
                                 'condition' => '<',
@@ -1927,4 +1927,443 @@ class DataTableQueryFactoryBuildTest extends TestCase
         $this->assertNotEmpty($result['data']);
         $this->assertSame($result['data'][0]['user_test_id'], "Lucas Jovencio");
     }
+
+    public function testIWantToSortByNameAscAndThenByIdDesc()
+    {
+        $request = new Request;
+        $request->merge([
+            "draw" => 1,
+            "columns" => [
+                [
+                    "data" => "id",
+                    "name" => "",
+                    "searchable" => false,
+                    "orderable" => true,
+                    "search" => [
+                        "value" => "",
+                        "regex" => false
+                    ]
+                ],
+                [
+                    "data" => "name",
+                    "name" => "",
+                    "searchable" => true,
+                    "orderable" => true,
+                    "search" => [
+                        "value" => "",
+                        "regex" => false
+                    ]
+                ],
+                [
+                    "data" => "email",
+                    "name" => "",
+                    "searchable" => true,
+                    "orderable" => true,
+                    "search" => [
+                        "value" => "",
+                        "regex" => false
+                    ]
+                ],
+                [
+                    "data" => "quantity_post",
+                    "name" => "",
+                    "searchable" => false,
+                    "orderable" => false,
+                    "search" => [
+                        "value" => "",
+                        "regex" => false
+                    ]
+                ],
+                [
+                    "data" => "created_at",
+                    "name" => "",
+                    "searchable" => false,
+                    "orderable" => true,
+                    "search" => [
+                        "value" => "",
+                        "regex" => false
+                    ]
+                ],
+                [
+                    "data" => "actions",
+                    "name" => "",
+                    "searchable" => false,
+                    "orderable" => false,
+                    "search" => [
+                        "value" => "",
+                        "regex" => false
+                    ]
+                ]
+            ],
+            "order" => [
+                [
+                    "column" => 1, // name
+                    "dir" => "asc",
+                    "name" => "name"
+                ],
+                [
+                    "column" => 0, // id
+                    "dir" => "desc",
+                    "name" => "id"
+                ]
+            ],
+            "start" => 0,
+            "length" => 10,
+            "search" => [
+                "value" => "",
+                "regex" => false
+            ],
+            "format_date_locale" => "DD/MM/YYYY HH:mm",
+            "timezone_locale" => "America/Sao_Paulo"
+        ]);
+                
+        $dataTableQueryFactory = new DataTableQueryFactory($request);
+        $config = [
+            'query' => [],
+            'with' => ["posts"],
+            'select' => ["id", "name", "email", "created_at"],
+            'map' => fn($user) => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'created_at' => $user->created_at,
+                'quantity_post' => $user->posts->count(),
+            ],
+            'timezone' => [],
+            'where' => null
+        ];
+
+        $result = $dataTableQueryFactory->build(UserTest::class, $config);
+
+        $this->assertIsArray($result);
+        $this->assertArrayHasKey('data', $result);
+        $this->assertNotEmpty($result['data']);
+
+        // Verifica se está ordenado por nome ascendente e, em caso de empate, por id descendente
+        $data = $result['data'];
+        for ($i = 1; $i < count($data); $i++) {
+            $prev = $data[$i - 1];
+            $curr = $data[$i];
+            if ($prev['name'] === $curr['name']) {
+                $this->assertGreaterThanOrEqual($curr['id'], $prev['id']);
+            } else {
+                $this->assertLessThanOrEqual(strcmp($curr['name'], $prev['name']), 0);
+            }
+        }
+    }
+
+    public function testDeeplyNestedCriteriaWithFiveLevelsEach()
+    {
+        $request = new Request;
+        $criteria = [];
+        for ($i = 0; $i < 5; $i++) {
+            $criteria[] = [
+                'logic' => 'AND',
+                'criteria' => [
+                    [
+                        'logic' => 'OR',
+                        'criteria' => [
+                            [
+                                'logic' => 'AND',
+                                'criteria' => [
+                                    [
+                                        'logic' => 'OR',
+                                        'criteria' => [
+                                            [
+                                                'condition' => 'contains',
+                                                'origData' => 'name',
+                                                'value' => ["Lucas"],
+                                                'type' => 'string'
+                                            ],
+                                            [
+                                                'condition' => 'contains',
+                                                'origData' => 'email',
+                                                'value' => ["lucas"],
+                                                'type' => 'string'
+                                            ]
+                                        ]
+                                    ],
+                                    [
+                                        'condition' => 'contains',
+                                        'origData' => 'email',
+                                        'value' => ["@gmail.com"],
+                                        'type' => 'string'
+                                    ]
+                                ]
+                            ],
+                            [
+                                'condition' => 'starts',
+                                'origData' => 'name',
+                                'value' => ["L"],
+                                'type' => 'string'
+                            ]
+                        ]
+                    ],
+                    [
+                        'condition' => 'ends',
+                        'origData' => 'email',
+                        'value' => ["com"],
+                        'type' => 'string'
+                    ]
+                ]
+            ];
+        }
+
+        $request->merge([
+            "draw" => 1,
+            "columns" => [
+                [
+                    "data" => "id",
+                    "name" => "",
+                    "searchable" => false,
+                    "orderable" => true,
+                    "search" => [
+                        "value" => "",
+                        "regex" => false
+                    ]
+                ],
+                [
+                    "data" => "name",
+                    "name" => "",
+                    "searchable" => true,
+                    "orderable" => true,
+                    "search" => [
+                        "value" => "",
+                        "regex" => false
+                    ]
+                ],
+                [
+                    "data" => "email",
+                    "name" => "",
+                    "searchable" => true,
+                    "orderable" => true,
+                    "search" => [
+                        "value" => "",
+                        "regex" => false
+                    ]
+                ]
+            ],
+            "order" => [
+                [
+                    "column" => 0,
+                    "dir" => "asc"
+                ]
+            ],
+            "start" => 0,
+            "length" => 10,
+            "search" => [
+                "value" => "",
+                "regex" => false
+            ],
+            "searchBuilder" => [
+                "criteria" => $criteria,
+                "logic" => "AND"
+            ]
+        ]);
+
+        $dataTableQueryFactory = new DataTableQueryFactory($request);
+        $config = [
+            'query' => [],
+            'select' => ["id", "name", "email"],
+        ];
+
+        $result = $dataTableQueryFactory->build(UserTest::class, $config);
+
+        $this->assertIsArray($result);
+        $this->assertArrayHasKey('data', $result);
+        // O resultado pode ser vazio, mas o teste garante que a query recursiva funcione sem erro
+        $this->assertTrue(isset($result['recordsTotal']));
+    }
+
+    public function testOrderByWithSqlInjectionAttempt()
+    {
+        $request = new Request;
+        $request->merge([
+            "draw" => 1,
+            "columns" => [
+                [
+                    "data" => "id; DROP TABLE user_tests; --",
+                    "name" => "",
+                    "searchable" => false,
+                    "orderable" => true,
+                    "search" => [
+                        "value" => "",
+                        "regex" => false
+                    ]
+                ],
+                [
+                    "data" => "name",
+                    "name" => "",
+                    "searchable" => true,
+                    "orderable" => true,
+                    "search" => [
+                        "value" => "",
+                        "regex" => false
+                    ]
+                ]
+            ],
+            "order" => [
+                [
+                    "column" => 0,
+                    "dir" => "desc; DROP TABLE post_tests; --"
+                ]
+            ],
+            "start" => 0,
+            "length" => 10,
+            "search" => [
+                "value" => "",
+                "regex" => false
+            ]
+        ]);
+
+        $dataTableQueryFactory = new DataTableQueryFactory($request);
+        $config = [
+            'query' => [],
+            'select' => ["id", "name"],
+        ];
+
+        $result = $dataTableQueryFactory->build(UserTest::class, $config);
+
+        $this->assertIsArray($result);
+        $this->assertArrayHasKey('data', $result);
+        $this->assertNotEmpty($result['data']);
+
+        // Verifica se as tabelas ainda existem (não foram dropadas)
+        $this->assertTrue(self::$capsule->schema()->hasTable('user_tests'));
+        $this->assertTrue(self::$capsule->schema()->hasTable('post_tests'));
+    }
+
+    public function testSqlInjectionInColumnName()
+    {
+        $request = new Request;
+        $request->merge([
+            "draw" => 1,
+            "columns" => [
+                [
+                    "data" => "name; DROP TABLE user_tests; --",
+                    "name" => "",
+                    "searchable" => true,
+                    "orderable" => true,
+                    "search" => [
+                        "value" => "",
+                        "regex" => false
+                    ]
+                ]
+            ],
+            "order" => [
+                [
+                    "column" => 0,
+                    "dir" => "asc"
+                ]
+            ],
+            "start" => 0,
+            "length" => 10,
+            "search" => [
+                "value" => "",
+                "regex" => false
+            ]
+        ]);
+
+        $dataTableQueryFactory = new DataTableQueryFactory($request);
+        $config = [
+            'query' => [],
+            'select' => ["id", "name"],
+        ];
+
+        $result = $dataTableQueryFactory->build(UserTest::class, $config);
+
+        $this->assertIsArray($result);
+        $this->assertArrayHasKey('data', $result);
+        $this->assertNotEmpty($result['data']);
+        $this->assertTrue(self::$capsule->schema()->hasTable('user_tests'));
+    }
+
+    public function testSqlInjectionInSearchValue()
+    {
+        $request = new Request;
+        $request->merge([
+            "draw" => 1,
+            "columns" => [
+                [
+                    "data" => "name",
+                    "name" => "",
+                    "searchable" => true,
+                    "orderable" => true,
+                    "search" => [
+                        "value" => "' OR 1=1; DROP TABLE post_tests; --",
+                        "regex" => false
+                    ]
+                ]
+            ],
+            "order" => [
+                [
+                    "column" => 0,
+                    "dir" => "asc"
+                ]
+            ],
+            "start" => 0,
+            "length" => 10,
+            "search" => [
+                "value" => "' OR 1=1; DROP TABLE post_tests; --",
+                "regex" => false
+            ]
+        ]);
+
+        $dataTableQueryFactory = new DataTableQueryFactory($request);
+        $config = [
+            'query' => [],
+            'select' => ["id", "name"],
+        ];
+
+        $result = $dataTableQueryFactory->build(UserTest::class, $config);
+
+        $this->assertIsArray($result);
+        $this->assertArrayHasKey('data', $result);
+        $this->assertTrue(self::$capsule->schema()->hasTable('post_tests'));
+    }
+
+    public function testSqlInjectionInOrderDir()
+    {
+        $request = new Request;
+        $request->merge([
+            "draw" => 1,
+            "columns" => [
+                [
+                    "data" => "name",
+                    "name" => "",
+                    "searchable" => true,
+                    "orderable" => true,
+                    "search" => [
+                        "value" => "",
+                        "regex" => false
+                    ]
+                ]
+            ],
+            "order" => [
+                [
+                    "column" => 0,
+                    "dir" => "asc; DROP TABLE user_tests; --"
+                ]
+            ],
+            "start" => 0,
+            "length" => 10,
+            "search" => [
+                "value" => "",
+                "regex" => false
+            ]
+        ]);
+
+        $dataTableQueryFactory = new DataTableQueryFactory($request);
+        $config = [
+            'query' => [],
+            'select' => ["id", "name"],
+        ];
+
+        $result = $dataTableQueryFactory->build(UserTest::class, $config);
+
+        $this->assertIsArray($result);
+        $this->assertArrayHasKey('data', $result);
+        $this->assertTrue(self::$capsule->schema()->hasTable('user_tests'));
+    }
+
 }

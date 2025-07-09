@@ -100,135 +100,48 @@ class DataTableQueryFactory {
     }
 
     private function constructorQueryDataTable($model, $post, $matchColumns) {
-
         $query = " ";
         $queryParam = [];
-        if (isset($post["searchBuilder"]["criteria"]) && isset($post["searchBuilder"]["criteria"]) && count($post["searchBuilder"]["criteria"])) {
 
-            $oneTree = $post["searchBuilder"]["criteria"];
-            $oneTree = array_values(array_filter($oneTree, function($row) {
-                return count(array_filter($row['value'] ?? [], function($value) {
-                    return !is_null($value) && trim($value ?? "") != '';
-                })) || array_key_exists('logic', $row);
-            }));
-
-            $logic1 = $post["searchBuilder"]["logic"];
-            $lastKey = array_key_last($oneTree);
-
-
-            foreach ($oneTree as $key => $row) {
-                
-                if (isset($row['logic'])) {
-
-                    $logic2 = $row['logic'];
-                    $query2 = '';
-
-                    $secondTree = $row['criteria'];
-                    $secondTree = array_values(array_filter($secondTree, function($row) {
-                        return count(array_filter($row['value'] ?? [], function($value) {
-                            return !is_null($value) && trim($value ?? "") != '';
-                        })) || array_key_exists('logic', $row);
-                    }));
-
-                    $lastKey2 = array_key_last($secondTree);
-
-                    foreach ($secondTree as $key2 => $row2) {
-                
-                        if (isset($row2['logic'])) {
-                            // Inicio da arvore 3
-                            $logic3 = $row2['logic'];
-                            $query3 = '';
-
-                            $threeTree = $row2['criteria'];
-                            $threeTree = array_values(array_filter($threeTree, function($row) {
-                                return count(array_filter($row['value'] ?? [], function($value) {
-                                    return !is_null($value) && trim($value ?? "") != '';
-                                })) || array_key_exists('logic', $row);
-                            }));
-
-                            $lastKey3 = array_key_last($threeTree);
-
-                            foreach ($threeTree as $key3 => $row3) {
-                        
-                                if (isset($row3['logic'])) {
-                                    // limit 3
-                                } else {
-                
-                                    if (isset($matchColumns[$row3["origData"] ?? null])) {
-                                        list($auxQuery3, $params) = $matchColumns[$row3["origData"]]($row3, $this->tableName, function($condition, $column, $param, $type = "string") {
-                                            return $this->_matchConditional($condition, $column, $param, $type);
-                                        });
-                                    } else {
-                                        list($auxQuery3, $params) = $this->_matchConditional($row3["condition"] ?? null, $row3["origData"] ?? null, $row3["value"] ?? [], $row3["type"] ?? "string");
-                                    }
-
-                                    if (!empty($params) && is_array($params))
-                                        array_push($queryParam, ...$params);
-
-                                    if ($lastKey3 != $key3 && !empty($auxQuery3)) {
-                                        $query3 .= " ({$auxQuery3}) {$logic3} ";
-                                    } else if (!empty($auxQuery3)) {
-                                        $query3 .= " ({$auxQuery3}) ";
-                                    }
-                                }
-                                // Fim da arvore 3.
-                            }
-
-                            // LOGICA DO INDICE 2, COLOCA TODA A QUERY DA ARVORE DO INDICE 3 NA QUERY DO INDICE 2
-                            if ($lastKey2 != $key2 && !empty($query3)) {
-                                $query2 .= " ({$query3}) {$logic2} ";
-                            } else if (!empty($query3)) {
-                                $query2 .= " ({$query3}) ";
-                            }
-
-                        } else {
-        
-                            if (isset($matchColumns[$row2["origData"] ?? null])) {
-                                list($auxQuery2, $params) = $matchColumns[$row2["origData"]]($row2, $this->tableName, function($condition, $column, $param, $type = "string") {
-                                    return $this->_matchConditional($condition, $column, $param, $type);
-                                });
-                            } else {
-                                list($auxQuery2, $params) = $this->_matchConditional($row2["condition"] ?? null, $row2["origData"] ?? null, $row2["value"], $row2["type"] ?? "string");
-                            }
-
-                            if (!empty($params) && is_array($params))
-                                array_push($queryParam, ...$params);
-                            
-                            // LOGICA DO INDICE 2
-                            if ($lastKey2 != $key2 && !empty($auxQuery2)) {
-                                $query2 .= " ({$auxQuery2}) {$logic2} ";
-                            } else if (!empty($auxQuery2)) {
-                                $query2 .= " ({$auxQuery2}) ";
-                            }
-                        }
+        // Função recursiva para processar critérios aninhados
+        $processCriteria = function ($criteria, $logic, &$queryParam) use (&$processCriteria, $matchColumns) {
+            $parts = [];
+            foreach ($criteria as $row) {
+                if (isset($row['logic']) && isset($row['criteria'])) {
+                    // Recursão para subníveis
+                    $sub = $processCriteria($row['criteria'], $row['logic'], $queryParam);
+                    if ($sub !== '') {
+                        $parts[] = "({$sub})";
                     }
-
-                    // LOGICA DO INDICE 1, COLOCA TODA A QUERY DA ARVORE DO INDICE 2 NA QUERY DO INDICE 1
-                    if ($lastKey != $key && !empty($query2)) {
-                        $query .= " ({$query2}) {$logic1} ";
-                    } else if (!empty($query2)) {
-                        $query .= " ({$query2}) ";
-                    }
-
                 } else {
-
                     if (isset($matchColumns[$row["origData"] ?? null])) {
-                        list($auxQuery1, $params) = $matchColumns[$row["origData"]]($row, $this->tableName, function($condition, $column, $param, $type = "string") {
+                        list($auxQuery, $params) = $matchColumns[$row["origData"]]($row, $this->tableName, function($condition, $column, $param, $type = "string") {
                             return $this->_matchConditional($condition, $column, $param, $type);
                         });
                     } else {
-                        list($auxQuery1, $params) = $this->_matchConditional($row["condition"] ?? null, $row["origData"] ?? null, $row["value"] ?? [], $row["type"] ?? "string");
+                        list($auxQuery, $params) = $this->_matchConditional($row["condition"] ?? null, $row["origData"] ?? null, $row["value"] ?? [], $row["type"] ?? "string");
                     }
-
-                    if (!empty($params) && is_array($params))
+                    if (!empty($params) && is_array($params)) {
                         array_push($queryParam, ...$params);
-
-                    if ($lastKey != $key && !empty($auxQuery1)) {
-                        $query .= " ({$auxQuery1}) {$logic1} ";
-                    } else if (!empty($auxQuery1)) {
-                        $query .= " ({$auxQuery1}) ";
+                    }
+                    if (!empty($auxQuery)) {
+                        $parts[] = "({$auxQuery})";
                     }
                 }
+            }
+            return implode(" {$logic} ", $parts);
+        };
+
+        if (
+            isset($post["searchBuilder"]["criteria"]) &&
+            is_array($post["searchBuilder"]["criteria"]) &&
+            count($post["searchBuilder"]["criteria"])
+        ) {
+            $logic = $post["searchBuilder"]["logic"] ?? 'AND';
+            $criteria = $post["searchBuilder"]["criteria"];
+            $queryBuilt = $processCriteria($criteria, $logic, $queryParam);
+            if (!empty($queryBuilt)) {
+                $query .= $queryBuilt;
             }
         }
 
@@ -289,26 +202,24 @@ class DataTableQueryFactory {
         if (!empty($post["order"]) && count($post["order"])) {
             $orders = $post["columns"];
 
-            $orderByRaw = ' ';
-            $lastKey = array_key_last($post["order"]);
-
             foreach($post["order"] as $key => $column) {
                 if (empty($orders[$column['column']])) {
                     continue;
                 }
 
                 $col = $orders[$column['column']]['data'];
-                $dir = $column['dir'];
-                
-                if ($lastKey != $key) {
-                    $orderByRaw .= " {$col} {$dir}, ";
-                } else {
-                    $orderByRaw .= " {$col} {$dir} ";
-                }
-            }
+                $dir = strtolower($column['dir']);
 
-            if (!empty($orderByRaw)) {
-                $model->orderByRaw($orderByRaw);
+                if (!preg_match('/^[a-zA-Z0-9_\.]+$/', $col)) {
+                    continue;
+                }
+
+                // Validação da direção
+                if (!in_array($dir, ['asc', 'desc'])) {
+                    $dir = 'asc';
+                }
+
+                $model->orderBy($col, $dir);
             }
         }
 
