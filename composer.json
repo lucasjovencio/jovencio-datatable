@@ -1,6 +1,6 @@
 {
     "name": "jovencio/datatable",
-    "version": "1.0.7",
+    "version": "1.0.8",
     "minimum-stability": "stable",
     "prefer-stable": true,
     "license": "MIT",
@@ -23,7 +23,7 @@
     ],
     "require": {
         "php": "^8.0",
-        "illuminate/support": "^8.0 || ^9.0 || ^10.0 || ^11.0"
+        "illuminate/support": ">=8.0"
     },
     "require-dev": {
         "phpunit/phpunit": "^11.5",
