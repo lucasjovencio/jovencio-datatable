@@ -119,7 +119,7 @@ class DataTableQueryFactory {
                             return $this->_matchConditional($condition, $column, $param, $type);
                         });
                     } else {
-                        list($auxQuery, $params) = $this->_matchConditional($row["condition"] ?? null, $row["origData"] ?? null, $row["value"] ?? [], $row["type"] ?? "string");
+                        list($auxQuery, $params) = $this->_matchConditional((isset($row['origCond']) && !empty(isset($row['origCond']))) ? $row['origCond'] : $row["condition"] ?? null, $row["origData"] ?? null, $row["value"] ?? [], $row["type"] ?? "string");
                     }
                     if (!empty($params) && is_array($params)) {
                         array_push($queryParam, ...$params);
