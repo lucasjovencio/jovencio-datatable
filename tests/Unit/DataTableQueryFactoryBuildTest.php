@@ -461,9 +461,10 @@ class DataTableQueryFactoryBuildTest extends TestCase
             "searchBuilder" => [
                 "criteria" => [
                     [
-                        "condition" => "contains",
+                        "condition" => "containsCustom",
                         "data" => "Name",
                         "origData" => "name",
+                        "origCond" => "contains",
                         "type" => "string",
                         "value" => ["Lucas Jovencio"],
                         "value1" => "Lucas Jovencio"
