@@ -227,13 +227,19 @@ class DataTableQueryFactory {
     }
 
     private function hasTimestamp($column) {
+        list($table, $columnAux) = explode('.', $column);
+        if (empty($columnAux)) {
+            $table = $this->tableName;
+        } else {
+            $column = $columnAux;
+        }
         switch (strtolower(config('database.default'))) {
             case 'sqlite':
                 $columnType = null;
                 try {
-                    $columnTypeLite = DBLaravel::select("PRAGMA table_info({$this->tableName})");
+                    $columnTypeLite = DBLaravel::select("PRAGMA table_info({$table})");
                 } catch (\Exception $th) {
-                    $columnTypeLite = DBManager::select("PRAGMA table_info({$this->tableName})");
+                    $columnTypeLite = DBManager::select("PRAGMA table_info({$table})");
                 }
 
                 foreach ($columnTypeLite as $columnLite) {
@@ -246,13 +252,13 @@ class DataTableQueryFactory {
             case 'pgsql':
                 try {
                     $columnType = DBLaravel::table('information_schema.columns')
-                    ->where('table_name', $this->tableName)
+                    ->where('table_name', $table)
                     ->where('column_name', $column)
                     ->where('table_schema', 'public')
                     ->first();
                 } catch (\Exception $th) {
                     $columnType = DBManager::table('information_schema.columns')
-                    ->where('table_name', $this->tableName)
+                    ->where('table_name', $table)
                     ->where('column_name', $column)
                     ->where('table_schema', 'public')
                     ->first();
@@ -264,12 +270,12 @@ class DataTableQueryFactory {
             case 'mariadb':
                 try {
                     $columnType = DBLaravel::table('information_schema.columns')
-                    ->where('table_name', $this->tableName)
+                    ->where('table_name', $table)
                     ->where('column_name', $column)
                     ->first();
                 } catch (\Exception $th) {
                     $columnType = DBManager::table('information_schema.columns')
-                    ->where('table_name', $this->tableName)
+                    ->where('table_name', $table)
                     ->where('column_name', $column)
                     ->first();
                 }
@@ -278,12 +284,12 @@ class DataTableQueryFactory {
             case 'sqlsrv':
                 try {
                     $columnType = DBLaravel::table('INFORMATION_SCHEMA.COLUMNS')
-                    ->where('TABLE_NAME', $this->tableName)
+                    ->where('TABLE_NAME', $table)
                     ->where('COLUMN_NAME', $column)
                     ->first();
                 } catch (\Exception $th) {
                     $columnType = DBManager::table('INFORMATION_SCHEMA.COLUMNS')
-                    ->where('TABLE_NAME', $this->tableName)
+                    ->where('TABLE_NAME', $table)
                     ->where('COLUMN_NAME', $column)
                     ->first();
                 }
@@ -297,10 +303,9 @@ class DataTableQueryFactory {
     private function formatValue($column, $columnDT, $value, $type) {
 
         $valueAux = explode(' ', $value);
-        $addDefaultTime = false;
-        if (1 === count($valueAux) && in_array(strtolower($type), ['date', 'moment'])) {
-            $value = $value . ' 23:59:59'; // Default to end of day if no time is provided
-            $addDefaultTime = true;
+        $hasTime = false;
+        if (1 !== count($valueAux) && in_array(strtolower($type), ['date', 'moment'])) {
+            $hasTime = true;
         }
 
         $timezoneMatch = null;
@@ -316,7 +321,7 @@ class DataTableQueryFactory {
             $timezoneMatch = $this->timezone[$column];
         }
 
-        $defaultReturn = function($column, $formatDateLocale, $value) use($addDefaultTime, $timezoneMatch) {
+        $defaultReturn = function($column, $formatDateLocale, $value) use($hasTime, $timezoneMatch) {
             try {
                 $hasTimestamp   = $this->hasTimestamp($column);
             } catch (\Exception $e) {
@@ -328,14 +333,7 @@ class DataTableQueryFactory {
             $appTimezone    = !empty($timezoneMatch) && !empty($timezoneMatch["timezone"]["app"]) && $timezoneMatch["enable"] ? $timezoneMatch["timezone"]["app"] : $this->timezoneAppName;
             $clientTimezone = !empty($timezoneMatch) && !empty($timezoneMatch["timezone"]["client"]) && $timezoneMatch["enable"] ? $timezoneMatch["timezone"]["client"] : $this->timezoneLocaleName;
             
-            if ($addDefaultTime) {
-                $valueAux = explode(' ', $from);
-                if (count($valueAux) === 1) {
-                    $from .= ' H:i:s'; // Default to end of day if no time is provided
-                }
-            }
-
-            if ($hasTimestamp) {
+            if ($hasTimestamp && $hasTime) {
                 $date = DateTime::createFromFormat($from, $value, new DateTimeZone($clientTimezone));
                 $date->setTimezone(new DateTimeZone($appTimezone));
                 $formattedDate = $date->format($dateFormat);
@@ -402,15 +400,38 @@ class DataTableQueryFactory {
                         case 'pgsql':
                             $dateFormat = !empty($timezoneMatch) ? $timezoneMatch["format"]["sql"] : 'YYYY-MM-DD HH24:MI';
                             $query = " ? {$condition} to_char({$column}, '{$dateFormat}') ";
+
+                            if (1 === count(explode(' ', $dateFormat))) {
+                                $clientTimezone = !empty($timezoneMatch) && !empty($timezoneMatch["timezone"]["client"]) && $timezoneMatch["enable"] ? $timezoneMatch["timezone"]["client"] : $this->timezoneLocaleName;
+                                $appTimezone    = !empty($timezoneMatch) && !empty($timezoneMatch["timezone"]["app"]) && $timezoneMatch["enable"] ? $timezoneMatch["timezone"]["app"] : $this->timezoneAppName;
+                                $query = " ? {$condition} to_char({$column} AT TIME ZONE '{$appTimezone}' AT TIME ZONE '{$clientTimezone}', '{$dateFormat}') ";
+                            }
+
                             break;
                         case 'mysql':
                         case 'mariadb':
                             $dateFormat = !empty($timezoneMatch) ? $timezoneMatch["format"]["sql"] : '%Y-%m-%d %H:%i';
                             $query = " ? {$condition} DATE_FORMAT({$column}, '{$dateFormat}') ";
+
+                            if (1 === count(explode(' ', $dateFormat))) {
+                                $clientTimezone = !empty($timezoneMatch) && !empty($timezoneMatch["timezone"]["client"]) && $timezoneMatch["enable"] ? $timezoneMatch["timezone"]["client"] : $this->timezoneLocaleName;
+                                $appTimezone    = !empty($timezoneMatch) && !empty($timezoneMatch["timezone"]["app"]) && $timezoneMatch["enable"] ? $timezoneMatch["timezone"]["app"] : $this->timezoneAppName;
+                                $query = " ? {$condition} DATE_FORMAT(CONVERT_TZ({$column}, '{$appTimezone}', '{$clientTimezone}'), '{$dateFormat}') ";
+                            } 
                             break;
                         case 'sqlsrv':
                             $dateFormat = !empty($timezoneMatch) ? $timezoneMatch["format"]["sql"] : 'yyyy-MM-dd HH:mm';
                             $query = " ? {$condition} FORMAT({$column}, '{$dateFormat}') ";
+
+                            if (1 === count(explode(' ', $dateFormat))) {
+                                $clientTimezone = !empty($timezoneMatch) && !empty($timezoneMatch["timezone"]["client"]) && $timezoneMatch["enable"] ? $timezoneMatch["timezone"]["client"] : $this->timezoneLocaleName;
+                                $appTimezone    = !empty($timezoneMatch) && !empty($timezoneMatch["timezone"]["app"]) && $timezoneMatch["enable"] ? $timezoneMatch["timezone"]["app"] : $this->timezoneAppName;
+                                $dtApp = new \DateTime('now', new \DateTimeZone($appTimezone));
+                                $dtClient = new \DateTime('now', new \DateTimeZone($clientTimezone));
+                                $offset = ($dtClient->getOffset() - $dtApp->getOffset()) / 3600;
+
+                                $query = " ? {$condition} FORMAT(DATEADD(HOUR, {$offset}, {$column}), '{$dateFormat}') ";
+                            } 
                             break;
                     }
                 }
