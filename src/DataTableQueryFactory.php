@@ -448,7 +448,8 @@ class DataTableQueryFactory {
                     '!contains' => " {$column} NOT LIKE ? ",
                     'ends' => " {$column} LIKE ? ",
                     '!ends' => " {$column} NOT LIKE ? ",
-                    default => " ? {$condition} {$column} "
+                    '=', '!=', '<', '<=', '>', '>='  => " ? {$condition} {$column} ",
+                    default => throw new \InvalidArgumentException("Condition '{$condition}' is not supported.")
                 };
                 break;
         }
@@ -481,9 +482,17 @@ class DataTableQueryFactory {
             case '!ends':
                 $params[] = "%{$this->formatValue($column, $conditionDT, $param[0], $type)}";
                 break;
-            default:
-                $params[] = $this->formatValue($column, $conditionDT, $param[0], $type);
+
+            case '=':
+            case '!=':
+            case '<':
+            case '<=':
+            case '>':
+            case '>=':
+                $params[] = $this->formatValue($column, $condition, $param[0], $type);
                 break;
+            default:
+                throw new \InvalidArgumentException("Condition '{$condition}' is not supported.");
         }
         return $params;
     }
