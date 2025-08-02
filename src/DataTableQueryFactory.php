@@ -361,6 +361,12 @@ class DataTableQueryFactory {
                     return floatval($value);
                 }
                 return $value;
+            case "integer":
+            case "int":
+                if (is_numeric($value)) {
+                    return intval($value);
+                }
+                return $value;
             default:
                 return $value;
         }
@@ -489,7 +495,7 @@ class DataTableQueryFactory {
             case '<=':
             case '>':
             case '>=':
-                $params[] = $this->formatValue($column, $condition, $param[0], $type);
+                $params[] = $this->formatValue($column, $conditionDT, $param[0], $type);
                 break;
             default:
                 throw new \InvalidArgumentException("Condition '{$condition}' is not supported.");
