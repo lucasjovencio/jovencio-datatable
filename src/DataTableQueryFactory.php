@@ -306,12 +306,12 @@ class DataTableQueryFactory {
         $timezoneMatch = null;
         if (
             isset($this->timezone[$columnDT]) &&
-            isset($this->timezone[$columnDT]['date_format'], $this->timezone[$columnDT]['date_format']['php'])
+            isset($this->timezone[$columnDT]['format'], $this->timezone[$columnDT]['format']['php'])
         ) {
             $timezoneMatch = $this->timezone[$columnDT];
         } elseif (
             isset($this->timezone[$column]) &&
-            isset($this->timezone[$column]['date_format'], $this->timezone[$column]['date_format']['php'])
+            isset($this->timezone[$column]['format'], $this->timezone[$column]['format']['php'])
         ) {
             $timezoneMatch = $this->timezone[$column];
         }
@@ -321,9 +321,12 @@ class DataTableQueryFactory {
                 $hasTimestamp   = $this->hasTimestamp($column);
             } catch (\Exception $e) {
                 $hasTimestamp = false;
-            }   
-            $dateFormat     = !empty($timezoneMatch) && !empty($timezoneMatch["date_format"]["php"]) ? $timezoneMatch["date_format"]["php"] : 'Y-m-d H:i';
-            $from           = !empty($timezoneMatch) && !empty($timezoneMatch["date_format"]["front"]) ? $timezoneMatch["date_format"]["front"] : $formatDateLocale;
+            }
+            
+            $dateFormat     = !empty($timezoneMatch) && !empty($timezoneMatch["format"]["php"]) && $timezoneMatch["enable"] ? $timezoneMatch["format"]["php"] : 'Y-m-d H:i';
+            $from           = !empty($timezoneMatch) && !empty($timezoneMatch["format"]["front"]) && $timezoneMatch["enable"] ? $timezoneMatch["format"]["front"] : $formatDateLocale;
+            $appTimezone    = !empty($timezoneMatch) && !empty($timezoneMatch["timezone"]["app"]) && $timezoneMatch["enable"] ? $timezoneMatch["timezone"]["app"] : $this->timezoneAppName;
+            $clientTimezone = !empty($timezoneMatch) && !empty($timezoneMatch["timezone"]["client"]) && $timezoneMatch["enable"] ? $timezoneMatch["timezone"]["client"] : $this->timezoneLocaleName;
             
             if ($addDefaultTime) {
                 $valueAux = explode(' ', $from);
@@ -333,8 +336,8 @@ class DataTableQueryFactory {
             }
 
             if ($hasTimestamp) {
-                $date = DateTime::createFromFormat($from, $value, new DateTimeZone($this->timezoneLocaleName));
-                $date->setTimezone(new DateTimeZone($this->timezoneAppName));
+                $date = DateTime::createFromFormat($from, $value, new DateTimeZone($clientTimezone));
+                $date->setTimezone(new DateTimeZone($appTimezone));
                 $formattedDate = $date->format($dateFormat);
                 return $formattedDate;
             }
@@ -353,28 +356,7 @@ class DataTableQueryFactory {
                     default => 'm/d/Y h:i A'
                 };
 
-                if ($timezoneMatch && isset($timezoneMatch["enable"]) && $timezoneMatch["enable"]) {
-                    return $defaultReturn($column, $formatDateLocale, $value);
-                }
-
-                $from       = !empty($timezoneMatch) && !empty($timezoneMatch["date_format"]["front"]) ? $timezoneMatch["date_format"]["front"] : $formatDateLocale;
-                $dateFormat = !empty($timezoneMatch) && !empty($timezoneMatch["date_format"]["php"]) ? $timezoneMatch["date_format"]["php"] : 'Y-m-d H:i';
-                if ($addDefaultTime) {
-                    $valueAux = explode(' ', $from);
-                    if (count($valueAux) === 1) {
-                        $from .= ' H:i:s'; // Default to end of day if no time is provided
-                    }
-                }
-                if ($timezoneMatch["enable"]) {
-                    $date = DateTime::createFromFormat($from, $value, new DateTimeZone($this->timezoneLocaleName));
-                    $date->setTimezone(new DateTimeZone($timezoneMatch["utc"]));
-                    $formattedDate = $date->format($dateFormat);
-                    return $formattedDate;
-                }
-
-                $date = DateTime::createFromFormat($from, $value);
-                $formattedDate = $date->format($dateFormat);
-                return $formattedDate;
+                return $defaultReturn($column, $formatDateLocale, $value);
             case "num":
             case "num-fmt":
                 if (is_numeric($value)) {
@@ -401,12 +383,12 @@ class DataTableQueryFactory {
                 $timezoneMatch = null;
                 if (
                     isset($this->timezone[$columnDT]) &&
-                    isset($this->timezone[$columnDT]['date_format'], $this->timezone[$columnDT]['date_format']['sql'])
+                    isset($this->timezone[$columnDT]['format'], $this->timezone[$columnDT]['format']['sql'])
                 ) {
                     $timezoneMatch = $this->timezone[$columnDT];
                 } elseif (
                     isset($this->timezone[$column]) &&
-                    isset($this->timezone[$column]['date_format'], $this->timezone[$column]['date_format']['sql'])
+                    isset($this->timezone[$column]['format'], $this->timezone[$column]['format']['sql'])
                 ) {
                     $timezoneMatch = $this->timezone[$column];
                 }
@@ -414,21 +396,21 @@ class DataTableQueryFactory {
                 if (is_null($query)) {
                     switch (strtolower(config('database.default'))) {
                         case 'sqlite':
-                            $dateFormat = !empty($timezoneMatch) ? $timezoneMatch["date_format"]["sql"] : '%Y-%m-%d %H:%M';
-                            $query = " strftime('{$dateFormat}', {$column}) {$condition} ? ";
+                            $dateFormat = !empty($timezoneMatch) ? $timezoneMatch["format"]["sql"] : '%Y-%m-%d %H:%M';
+                            $query = " ? {$condition} strftime('{$dateFormat}', {$column}) ";
                             break;
                         case 'pgsql':
-                            $dateFormat = !empty($timezoneMatch) ? $timezoneMatch["date_format"]["sql"] : 'YYYY-MM-DD HH24:MI';
-                            $query = " to_char({$column}, '{$dateFormat}') {$condition} ? ";
+                            $dateFormat = !empty($timezoneMatch) ? $timezoneMatch["format"]["sql"] : 'YYYY-MM-DD HH24:MI';
+                            $query = " ? {$condition} to_char({$column}, '{$dateFormat}') ";
                             break;
                         case 'mysql':
                         case 'mariadb':
-                            $dateFormat = !empty($timezoneMatch) ? $timezoneMatch["date_format"]["sql"] : '%Y-%m-%d %H:%i';
-                            $query = " DATE_FORMAT({$column}, '{$dateFormat}') {$condition} ? ";
+                            $dateFormat = !empty($timezoneMatch) ? $timezoneMatch["format"]["sql"] : '%Y-%m-%d %H:%i';
+                            $query = " ? {$condition} DATE_FORMAT({$column}, '{$dateFormat}') ";
                             break;
                         case 'sqlsrv':
-                            $dateFormat = !empty($timezoneMatch) ? $timezoneMatch["date_format"]["sql"] : 'yyyy-MM-dd HH:mm';
-                            $query = " FORMAT({$column}, '{$dateFormat}') {$condition} ? ";
+                            $dateFormat = !empty($timezoneMatch) ? $timezoneMatch["format"]["sql"] : 'yyyy-MM-dd HH:mm';
+                            $query = " ? {$condition} FORMAT({$column}, '{$dateFormat}') ";
                             break;
                     }
                 }
@@ -445,7 +427,7 @@ class DataTableQueryFactory {
                     '!contains' => " {$column} NOT LIKE ? ",
                     'ends' => " {$column} LIKE ? ",
                     '!ends' => " {$column} NOT LIKE ? ",
-                    default => " {$column} {$condition} ? "
+                    default => " ? {$condition} {$column} "
                 };
                 break;
         }

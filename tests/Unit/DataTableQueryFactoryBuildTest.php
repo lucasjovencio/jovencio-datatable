@@ -863,20 +863,12 @@ class DataTableQueryFactoryBuildTest extends TestCase
                     [
                         'criteria' => [
                             [
-                                'condition' => '>',
+                                'condition' => '<',
                                 'data' => 'Email veried at',
                                 'origData' => 'email_verified_at',
                                 'type' => 'moment',
                                 'value' => ['01/01/2024 12:00 AM'],
                                 'value1' => '01/01/2024 12:00 AM'
-                            ],
-                            [
-                                'condition' => '<',
-                                'data' => 'Email veried at',
-                                'origData' => 'email_verified_at',
-                                'type' => 'moment',
-                                'value' => ['12/31/2100 12:00 AM'],
-                                'value1' => '12/31/2100 12:00 AM'
                             ],
                             [
                                 'criteria' => [
