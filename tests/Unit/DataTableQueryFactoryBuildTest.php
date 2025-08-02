@@ -1055,7 +1055,17 @@ class DataTableQueryFactoryBuildTest extends TestCase
                 'created_at' => $user->created_at,
                 'quantity_post' => $user->posts->count(),
             ],
-            'timezone' => [],
+            'timezone' => [
+                'email_verified_at'    => [
+                    "enable"        => true,
+                    "utc"           => "UTC",
+                    "date_format"   => [
+                        "php"       => "Y-m-d",
+                        "sql"       => "%Y-%m-%d",
+                        "front"     => "d/m/Y H:i"
+                    ]
+                ]
+            ],
             'where' => null
         ];
 
