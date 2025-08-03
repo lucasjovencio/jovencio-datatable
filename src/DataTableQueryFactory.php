@@ -508,7 +508,10 @@ class DataTableQueryFactory {
         if (in_array(strtolower($condition), ['between', '!between']) && (empty($param[0]) || empty($param[1]))) return [null, null];
 
         $query = $this->makeQuery($type, $condition, $column, $columnDT);
-        $params = $this->makeParams($type, $condition, $column, $columnDT, $param);
+        $params = [];
+        if (!in_array($condition, ['null', '!null'])) {
+            $params = $this->makeParams($type, $condition, $column, $columnDT, $param);
+        }
         
         return [$query, $params];
     }
