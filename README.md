@@ -4,7 +4,6 @@ Esta biblioteca é uma biblioteca para facilitar o retorno de um response para a
      
 ## Features  
   - Suporta [SearchBuilder.Criteria](https://datatables.net/extensions/searchbuilder) 
-    em até 3 níveis.
   - Ordenação de colunas por ajax do datatable
   - Pesquisa em colunas por ajax do datatable
 
@@ -34,7 +33,7 @@ class ExampleController extends Controller {
         $response = $dataTableQueryFactory->build(Model::class, [
             'query' => [
                 'user_id' => function($criteria, $tableName, $matchConditional) {
-                    list($queryParam, $params) = $matchConditional($criteria['condition'], 'user.name', $criteria['value'], $criteria['type']);
+                    list($queryParam, $params) = $matchConditional(!empty($criteria["origCond"]) ? $criteria["origCond"] : $criteria['condition'], 'user.name', $criteria['value'], $criteria['type'], $criteria['condition']);
                     return (!empty($queryParam)) ? [" ( EXISTS ( SELECT 1 FROM users user WHERE user.id = {$tableName}.user_id and ({$queryParam}) ) ) ", $params] : null;
                 }
             ],
@@ -53,13 +52,39 @@ class ExampleController extends Controller {
             },
             "timezone" => [
                 "created_at" => [
-                    "enable" => true,
-                    "utc" => "UTC",
-                    "date_format" => [
-                        "php" => "Y-m-d",
-                        "sql" => "%Y-%m-%d"
+                    "enable" => true, // default false
+                    "timezone"      => [
+                        "app"       => "UTC",
+                    ],
+                    "format"   => [
+                        "php"       => "Y-m-d",
+                        "sql"       => "%Y-%m-%d",
+                        "front"     => "d/m/Y"
                     ]
-                ]
+                ],
+                "updated_at" => [
+                    "enable" => true, // default false
+                    "timezone"      => [
+                        "client"       => "America/Sao_Paulo",
+                    ],
+                    "format"   => [
+                        "php"       => "Y-m-d",
+                        "sql"       => "%Y-%m-%d",
+                        "front"     => "d/m/Y"
+                    ]
+                ],
+                "customInputCreatedAt" => [
+                    "enable" => true, // default false
+                    "timezone"      => [
+                        "app"       => "UTC",
+                        "client"       => "America/Sao_Paulo",
+                    ],
+                    "format"   => [
+                        "php"       => "Y-m-d",
+                        "sql"       => "%Y-%m-%d",
+                        "front"     => "d/m/Y"
+                    ]
+                ],
             ],
             "where" => function($query) {
                 return $query->where("users_id", 1);
@@ -78,7 +103,7 @@ Este array de callbacks tem a responsabilidade de customizar querys para colunas
 
 'query' => [
     'user_id' => function($criteria, $tableName, $matchConditional) {
-        list($queryParam, $params) = $matchConditional($criteria['condition'], 'user.name', $criteria['value'], $criteria['type']);
+        list($queryParam, $params) = $matchConditional(!empty($criteria["origCond"]) ? $criteria["origCond"] : $criteria['condition'], 'user.name', $criteria['value'], $criteria['type'], $criteria['condition']);
         return (!empty($queryParam)) ? [" ( EXISTS ( SELECT 1 FROM users user WHERE user.id = {$tableName}.user_id and ({$queryParam}) ) ) ", $params] : null;
     }
 ]
@@ -106,8 +131,11 @@ Este array pode ser usado para trabalhar com colunas de datas, formatando-as par
 "timezone" => [
     "created_at" => [
         "enable" => true,
-        "utc" => "UTC",
-        "date_format" => [
+        "timezone" => [
+            "app" => "UTC",
+            "client" => "America/Sao_Paulo"
+        ],
+        "format" => [
             "php" => "Y-m-d",
             "sql" => "%Y-%m-%d"
         ]
@@ -131,7 +159,7 @@ This array of callbacks customizes queries for columns referencing a foreign ent
 ```php
 'query' => [
     'user_id' => function($criteria, $tableName, $matchConditional) {
-        list($queryParam, $params) = $matchConditional($criteria['condition'], 'user.name', $criteria['value'], $criteria['type']);
+        list($queryParam, $params) = $matchConditional(!empty($criteria["origCond"]) ? $criteria["origCond"] : $criteria['condition'], 'user.name', $criteria['value'], $criteria['type'], $criteria['condition']);
         return (!empty($queryParam)) ? [" ( EXISTS ( SELECT 1 FROM users user WHERE user.id = {$tableName}.user_id and ({$queryParam}) ) ) ", $params] : null;
     }
 ]
@@ -187,8 +215,11 @@ This array formats date columns for correct comparison and applies timezone adju
 "timezone" => [
     "created_at" => [
         "enable" => true,
-        "utc" => "UTC",
-        "date_format" => [
+        "utc" => [
+            "app" => "UTC",
+            "client" => "America/Sao_Paulo",
+        ],
+        "format" => [
             "php" => "Y-m-d",
             "sql" => "%Y-%m-%d"
         ]
