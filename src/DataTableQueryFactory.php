@@ -504,7 +504,7 @@ class DataTableQueryFactory {
     }
 
     private function _matchConditional($condition, $column, $param, $type = 'string', $columnDT = null) :array {
-        if (!empty($param) && !is_array($param)) $param = [$param];
+        if ($param !== null && !is_array($param)) $param = [$param];
         if (empty($column) || (!in_array(strtolower($condition), ['null', '!null']) && (empty($param) || is_null($param[0]) || $param[0] == ' ' || $param[0] == '' ))) return [null, null];
         if (in_array(strtolower($condition), ['between', '!between']) && (empty($param[0]) || empty($param[1]))) return [null, null];
 
