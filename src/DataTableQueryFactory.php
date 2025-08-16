@@ -377,11 +377,11 @@ class DataTableQueryFactory {
             case 'date':
             case 'moment':
                 $query = match ($condition) {
-                    'between' =>  " {$column} BETWEEN ? AND ? ",
-                    '!between' => " {$column} NOT BETWEEN ? AND ? ",
-                    'null' => " {$column} IS NULL ",
-                    '!null' => " {$column} IS NOT NULL ",
-                    default => null
+                    'between'   => " {$column} BETWEEN ? AND ? ",
+                    '!between'  => " {$column} NOT BETWEEN ? AND ? ",
+                    'null'      => " {$column} IS NULL ",
+                    '!null'     => " {$column} IS NOT NULL ",
+                    default     => null
                 };
                 
                 $timezoneMatch = null;
@@ -442,18 +442,28 @@ class DataTableQueryFactory {
                     }
                 }
                 break;
+            case 'multiselect':
+            case 'select':
+                $query = match ($condition) {
+                    '='     =>  " {$column} REGEXP ? ",
+                    '!='    => " {$column} NOT REGEXP ? ",
+                    'null'  => " {$column} IS NULL ",
+                    '!null' => " {$column} IS NOT NULL ",
+                    default => throw new \InvalidArgumentException("Condition '{$condition}' is not supported.")
+                };
+                break;
             default:
                 $query = match ($condition) {
-                    'between' => " {$column} BETWEEN ? AND ? ",
-                    '!between' => " {$column} NOT  BETWEEN ? AND ? ",
-                    'null' => " {$column} IS NULL ",
-                    '!null' => " {$column} IS NOT NULL ",
-                    'starts' => " {$column} LIKE ? ",
-                    '!starts' => " {$column} NOT LIKE ? ",
-                    'contains' => " {$column} LIKE ? ",
+                    'between'   => " {$column} BETWEEN ? AND ? ",
+                    '!between'  => " {$column} NOT  BETWEEN ? AND ? ",
+                    'null'      => " {$column} IS NULL ",
+                    '!null'     => " {$column} IS NOT NULL ",
+                    'starts'    => " {$column} LIKE ? ",
+                    '!starts'   => " {$column} NOT LIKE ? ",
+                    'contains'  => " {$column} LIKE ? ",
                     '!contains' => " {$column} NOT LIKE ? ",
-                    'ends' => " {$column} LIKE ? ",
-                    '!ends' => " {$column} NOT LIKE ? ",
+                    'ends'      => " {$column} LIKE ? ",
+                    '!ends'     => " {$column} NOT LIKE ? ",
                     '=', '!=', '<', '<=', '>', '>='  => " ? {$condition} {$column} ",
                     default => throw new \InvalidArgumentException("Condition '{$condition}' is not supported.")
                 };
@@ -464,10 +474,16 @@ class DataTableQueryFactory {
 
     private function makeParams($type, $condition, $column, $conditionDT, $param) {
         $params = [];
-        $typeDate = in_array(strtolower($type), ['date', 'moment']);
+        
+        $typeDate   = in_array(strtolower($type), ['date', 'moment']);
+        $typeSelect = in_array(strtolower($type), ['multiselect', 'select']);
         
         if (!is_array($param)) {
             $param = [$param];
+        }
+
+        if ($typeSelect) {
+            return ['"('.implode("|", $param).')"'];
         }
 
         switch (strtolower($condition)) {
